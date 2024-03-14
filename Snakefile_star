@@ -1,0 +1,71 @@
+samples = ['Rh_02_RNA_S122_L004_']
+### workflow ###
+
+# This rule establishes the names of output files from other rules
+rule all:
+     input:
+         # idx = "STARindex/merged_TX_noMatPAR_main",
+          idx = "STARindex/TX_fullMerge_main",
+          aln = expand("RNAbams/fullmerge_TX/{sample}Aligned.sortedByCoord.out.bam", sample = samples),
+          bamidx = expand("RNAbams/fullmerge_TX/{sample}Aligned.sortedByCoord.out.bam.bai", sample = samples),
+
+# This rule creates the STAR index
+rule star_index:
+    input:
+        fasta="genome/TX_fullMerge_main.fa",
+    output:
+        directory("STARindex/TX_fullMerge_main"),
+    threads: 16
+    params:
+        extra="",
+    resources:
+        tmpdir="/ohta2/bianca.sacchi/tmp"
+    wrapper:
+        "v2.6.1/bio/star/index"
+
+
+# This rule maps rna reads to genome
+rule star_pe_multi:
+    input:
+        fq1="fastqs/{sample}R1_001.fastq.gz",
+        fq2="fastqs/{sample}R2_001.fastq.gz",
+        idx="STARindex/TX_fullMerge_main"
+    output:
+        aln="RNAbams/fullmerge_TX/{sample}Aligned.sortedByCoord.out.bam",
+        log="RNAbams/fullmerge_TX/{sample}Log.out",
+        sj="RNAbams/fullmerge_TX/{sample}SJ.out.tab",
+        log_final="RNAbams/fullmerge_TX/{sample}Log.final.out",
+    params:
+        prefix = "RNAbams/fullmerge_TX/{sample}",
+    threads: 16
+    resources:
+        tmpdir="/ohta2/bianca.sacchi/tmp"
+    shell:
+         """
+         STAR --runThreadN {threads} \
+         --readFilesCommand zcat \
+         --genomeDir {input.idx} \
+         --readFilesIn {input.fq1} {input.fq2} \
+         --outSAMtype BAM SortedByCoordinate \
+         --twopassMode Basic \
+         --outSAMattrRGline ID:{wildcards.sample} \
+         --outFileNamePrefix {params.prefix} \
+         --outTmpDir {resources.tmpdir}/{wildcards.sample} \
+         """
+        
+rule index_bam:
+    """
+    Index sorted BAM with marked duplicates
+    """
+    input:
+        aln={rules.star_pe_multi.output.aln}
+    output:
+        bamidx = 'RNAbams/fullmerge_TX/{sample}Aligned.sortedByCoord.out.bam.bai',
+    log: 'logs/index_bam/{sample}_index_bam.rna.fullmerge.log'
+    threads: 16
+    resources:
+          tmpdir="/ohta2/bianca.sacchi/tmp"
+    shell:
+        """
+        samtools index -@ {threads} {input} 2> {log}
+        """

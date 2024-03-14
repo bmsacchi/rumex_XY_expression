@@ -1,0 +1,78 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 16
+Rules claiming more threads will be scaled down.
+Conda environments: ignored
+Job stats:
+job              count
+-------------  -------
+all                  1
+index_bam            1
+star_index           1
+star_pe_multi        1
+total                4
+
+Select jobs to execute...
+
+[Mon Mar  4 12:01:49 2024]
+rule star_index:
+    input: genome/TX_fullMerge_main.fa
+    output: STARindex/TX_fullMerge_main
+    jobid: 1
+    reason: Missing output files: STARindex/TX_fullMerge_main
+    threads: 16
+    resources: tmpdir=/ohta2/bianca.sacchi/tmp
+
+/ohta1/bianca.sacchi/miniconda3/envs/snakemake/bin/python3.11 /ohta2/bianca.sacchi/rumex_ase_TX/.snakemake/scripts/tmp68c0tqvw.wrapper.py
+[Mon Mar  4 12:32:15 2024]
+Finished job 1.
+1 of 4 steps (25%) done
+Select jobs to execute...
+
+[Mon Mar  4 12:32:15 2024]
+rule star_pe_multi:
+    input: fastqs/Rh_02_RNA_S122_L004_R1_001.fastq.gz, fastqs/Rh_02_RNA_S122_L004_R2_001.fastq.gz, STARindex/TX_fullMerge_main
+    output: RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam, RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Log.out, RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_SJ.out.tab, RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Log.final.out
+    jobid: 2
+    reason: Missing output files: RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam; Input files updated by another job: STARindex/TX_fullMerge_main
+    wildcards: sample=Rh_02_RNA_S122_L004_
+    threads: 16
+    resources: tmpdir=/ohta2/bianca.sacchi/tmp
+
+
+         STAR --runThreadN 16          --readFilesCommand zcat          --genomeDir STARindex/TX_fullMerge_main          --readFilesIn fastqs/Rh_02_RNA_S122_L004_R1_001.fastq.gz fastqs/Rh_02_RNA_S122_L004_R2_001.fastq.gz          --outSAMtype BAM SortedByCoordinate          --twopassMode Basic          --outSAMattrRGline ID:Rh_02_RNA_S122_L004_          --outFileNamePrefix RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_          --outTmpDir /ohta2/bianca.sacchi/tmp/Rh_02_RNA_S122_L004_          
+[Mon Mar  4 13:35:00 2024]
+Finished job 2.
+2 of 4 steps (50%) done
+Select jobs to execute...
+
+[Mon Mar  4 13:35:00 2024]
+rule index_bam:
+    input: RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam
+    output: RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam.bai
+    log: logs/index_bam/Rh_02_RNA_S122_L004__index_bam.rna.fullmerge.log
+    jobid: 3
+    reason: Missing output files: RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam.bai; Input files updated by another job: RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam
+    wildcards: sample=Rh_02_RNA_S122_L004_
+    threads: 16
+    resources: tmpdir=/ohta2/bianca.sacchi/tmp
+
+
+        samtools index -@ 16 RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam 2> logs/index_bam/Rh_02_RNA_S122_L004__index_bam.rna.fullmerge.log
+        
+[Mon Mar  4 13:35:30 2024]
+Finished job 3.
+3 of 4 steps (75%) done
+Select jobs to execute...
+
+[Mon Mar  4 13:35:30 2024]
+localrule all:
+    input: STARindex/TX_fullMerge_main, RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam, RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam.bai
+    jobid: 0
+    reason: Input files updated by another job: RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam, RNAbams/fullmerge_TX/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam.bai, STARindex/TX_fullMerge_main
+    resources: tmpdir=/tmp
+
+[Mon Mar  4 13:35:30 2024]
+Finished job 0.
+4 of 4 steps (100%) done
+Complete log: .snakemake/log/2024-03-04T120148.684739.snakemake.log
