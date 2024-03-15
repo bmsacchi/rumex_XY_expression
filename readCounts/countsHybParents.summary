@@ -1,0 +1,15 @@
+Status	RNAbams/merged_TX_hybcrossParents/TxF6f6Aligned.sortedByCoord.out.bam	RNAbams/merged_TX_hybcrossParents/TxF6m23Aligned.sortedByCoord.out.bam
+Assigned	39266849	42239465
+Unassigned_Unmapped	0	0
+Unassigned_Read_Type	0	0
+Unassigned_Singleton	0	0
+Unassigned_MappingQuality	0	0
+Unassigned_Chimera	0	0
+Unassigned_FragmentLength	0	0
+Unassigned_Duplicate	0	0
+Unassigned_MultiMapping	11531165	11850942
+Unassigned_Secondary	0	0
+Unassigned_NonSplit	0	0
+Unassigned_NoFeatures	7750984	8109009
+Unassigned_Overlapping_Length	0	0
+Unassigned_Ambiguity	279118	322709

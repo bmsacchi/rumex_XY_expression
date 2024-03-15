@@ -1,0 +1,61 @@
+ref = "genome/TX_fullMerge_main.fa"
+dir = "STARindex/merged_TX_noMatPAR_main/"
+mythreads = 4
+
+PREFIX = "jpop"
+
+with open("jpopInds.txt", "r") as file:
+    samples = [line.strip() for line in file if line.strip()]
+
+rule all:
+     input:
+          idx = dir, 
+          aln = expand("RNAbams/{popPrefix}/{sample}Aligned.sortedByCoord.out.bam", sample = samples, popPrefix = PREFIX),
+          bamidx = expand("RNAbams/{popPrefix}/{sample}Aligned.sortedByCoord.out.bam.bai", sample = samples, popPrefix = PREFIX),
+          fq1 = expand("fastqs/pop/{sample}_R1_clean.fastq.gz",sample = samples),
+          fq2 = expand("fastqs/pop/{sample}_R2_clean.fastq.gz",sample = samples) 
+
+# This rule maps rna reads to genome
+rule star_pe_multi:
+    input:
+        fq1= "fastqs/pop/{sample}_R1_clean.fastq.gz",
+        fq2= "fastqs/pop/{sample}_R1_clean.fastq.gz",
+        idx=dir
+    output:
+        aln="RNAbams/{popPrefix}/{sample}Aligned.sortedByCoord.out.bam",
+        log="RNAbams/{popPrefix}/{sample}Log.out",
+        sj="RNAbams/{popPrefix}/{sample}SJ.out.tab",
+        log_final="RNAbams/{popPrefix}/{sample}Log.final.out",
+    params:
+        prefix = "RNAbams/{popPrefix}/{sample}",
+    threads: mythreads
+    resources:
+        tmpdir="/ohta2/bianca.sacchi/tmp"
+    shell:
+         """
+         STAR --runThreadN {threads} \
+         --readFilesCommand zcat \
+         --genomeDir {input.idx} \
+         --readFilesIn {input.fq1} {input.fq2} \
+         --outSAMtype BAM SortedByCoordinate \
+         --twopassMode Basic \
+         --outSAMattrRGline ID:{wildcards.sample} \
+         --outFileNamePrefix {params.prefix} \
+         --outTmpDir {resources.tmpdir}/{wildcards.sample} \
+         """
+rule index_bam:
+    """
+    Index sorted BAM with marked duplicates
+    """
+    input:
+        aln={rules.star_pe_multi.output.aln}
+    output:
+        bamidx = 'RNAbams/{popPrefix}/{sample}Aligned.sortedByCoord.out.bam.bai',
+    log: 'logs/index_bam/{popPrefix}/{sample}_index_bam.rna.fullmerge.log'
+    threads: mythreads
+    resources:
+          tmpdir="/ohta2/bianca.sacchi/tmp"
+    shell:
+        """
+        samtools index -@ {threads} {input} 2> {log}
+        """

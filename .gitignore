@@ -4,3 +4,4 @@ fastqs/
 genome/
 pangenes/
 RNAbams/
+.snakemake/
