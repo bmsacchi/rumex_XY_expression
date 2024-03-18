@@ -1,3 +1,9 @@
+from os import path
+
+import numpy as np
+
+import pandas as pd
+
 ref = "genome/TX_fullMerge_main.fa"
 dir = "STARindex/merged_TX_noMatPAR_main/"
 mythreads = 4
@@ -13,13 +19,14 @@ rule all:
           aln = expand("RNAbams/{popPrefix}/{sample}Aligned.sortedByCoord.out.bam", sample = samples, popPrefix = PREFIX),
           bamidx = expand("RNAbams/{popPrefix}/{sample}Aligned.sortedByCoord.out.bam.bai", sample = samples, popPrefix = PREFIX),
           fq1 = expand("fastqs/pop/{sample}_R1_clean.fastq.gz",sample = samples),
-          fq2 = expand("fastqs/pop/{sample}_R2_clean.fastq.gz",sample = samples) 
-
+          fq2 = expand("fastqs/pop/{sample}_R2_clean.fastq.gz",sample = samples),
+          fc = expand("readCounts/{sample}.featureCounts", sample = samples), 
+          mc = "readCounts/jpopTXmerged.txt" 
 # This rule maps rna reads to genome
 rule star_pe_multi:
     input:
         fq1= "fastqs/pop/{sample}_R1_clean.fastq.gz",
-        fq2= "fastqs/pop/{sample}_R1_clean.fastq.gz",
+        fq2= "fastqs/pop/{sample}_R2_clean.fastq.gz",
         idx=dir
     output:
         aln="RNAbams/{popPrefix}/{sample}Aligned.sortedByCoord.out.bam",
@@ -39,6 +46,7 @@ rule star_pe_multi:
          --readFilesIn {input.fq1} {input.fq2} \
          --outSAMtype BAM SortedByCoordinate \
          --twopassMode Basic \
+         --outFilterMultimapNmax 1 \
          --outSAMattrRGline ID:{wildcards.sample} \
          --outFileNamePrefix {params.prefix} \
          --outTmpDir {resources.tmpdir}/{wildcards.sample} \
@@ -59,3 +67,38 @@ rule index_bam:
         """
         samtools index -@ {threads} {input} 2> {log}
         """
+
+rule read_counts:
+    input:
+        aln= 'RNAbams/jpop/{sample}Aligned.sortedByCoord.out.bam',
+        anno= 'genome/merged_TX_noMatPAR_main.gtf'
+    output:
+        multiext("readCounts/{sample}",
+                 ".featureCounts",
+                 ".featureCounts.summary")
+    log:
+        'logs/featureCounts/{sample}.log'
+    shell:
+        """
+        featureCounts -p --countReadPairs -t transcript -f -g gene_id -a {input.anno} -o {output[0]} {input.aln} &> {log}
+        """
+         
+rule merge_counts:
+    input:
+        expand("readCounts/{sample}.featureCounts", sample = samples)
+    output:
+        "readCounts/jpopTXmerged.txt"
+    run:
+        # Merge count files.
+        frames = (pd.read_csv(fp, sep="\t", skiprows=1,
+                        index_col=list(range(6)))
+            for fp in input)
+        merged = pd.concat(frames, axis=1)
+
+        # Extract sample names.
+        merged = merged.rename(
+            columns=lambda c: path.splitext(path.basename(c))[0])
+
+        merged.to_csv(output[0], sep="\t", index=True)        
+
+
