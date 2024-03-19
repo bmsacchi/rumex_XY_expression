@@ -2,7 +2,6 @@ RNAbams/
 STARindex/
 fastqs/
 genome/
-pangenes/
 RNAbams/
 .snakemake/
 .Rproj.user
