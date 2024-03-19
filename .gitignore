@@ -5,3 +5,6 @@ genome/
 pangenes/
 RNAbams/
 .snakemake/
+.Rproj.user
+*.Rproj
+*.html
