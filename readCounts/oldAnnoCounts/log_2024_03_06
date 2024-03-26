@@ -1,0 +1,54 @@
+
+featureCounts v2.0.2
+
+
+        ==========     _____ _    _ ____  _____  ______          _____  
+        =====         / ____| |  | |  _ \|  __ \|  ____|   /\   |  __ \ 
+          =====      | (___ | |  | | |_) | |__) | |__     /  \  | |  | |
+            ====      \___ \| |  | |  _ <|  _  /|  __|   / /\ \ | |  | |
+              ====    ____) | |__| | |_) | | \ \| |____ / ____ \| |__| |
+        ==========   |_____/ \____/|____/|_|  \_\______/_/    \_\_____/
+	  v2.0.2
+
+//========================== featureCounts setting ===========================\\
+||                                                                            ||
+||             Input files : 1 BAM file                                       ||
+||                                                                            ||
+||                           Rh_02_RNA_S122_L004_Aligned.sortedByCoord.ou ... ||
+||                                                                            ||
+||             Output file : countsFrankenTX.txt                              ||
+||                 Summary : countsFrankenTX.txt.summary                      ||
+||              Paired-end : yes                                              ||
+||        Count read pairs : yes                                              ||
+||              Annotation : merged_TX_noMatPAR_main.gtf (GTF)                ||
+||      Dir for temp files : readCounts                                       ||
+||                                                                            ||
+||                 Threads : 1                                                ||
+||                   Level : meta-feature level                               ||
+||      Multimapping reads : not counted                                      ||
+|| Multi-overlapping reads : not counted                                      ||
+||   Min overlapping bases : 1                                                ||
+||                                                                            ||
+\\============================================================================//
+
+//================================= Running ==================================\\
+||                                                                            ||
+|| Load annotation file merged_TX_noMatPAR_main.gtf ...                       ||
+||    Features : 178521                                                       ||
+||    Meta-features : 30771                                                   ||
+||    Chromosomes/contigs : 6                                                 ||
+||                                                                            ||
+|| Process BAM file Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam...      ||
+||    Paired-end reads are included.                                          ||
+||    Total alignments : 66199164                                             ||
+||    Successfully assigned alignments : 44393617 (67.1%)                     ||
+||    Running time : 4.34 minutes                                             ||
+||                                                                            ||
+|| Write the final count table.                                               ||
+|| Write the read assignment summary.                                         ||
+||                                                                            ||
+|| Summary of counting results can be found in file "readCounts/countsFranke  ||
+|| nTX.txt.summary"                                                           ||
+||                                                                            ||
+\\============================================================================//
+
