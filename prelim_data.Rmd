@@ -5,7 +5,108 @@ output: html_notebook
 
 
 ```{r}
+library(tidyverse)
+#library(vroom)
+#library(fread)
+library(data.table)
+
+pgMat<-read_table("pangenes/tx_mat_pangenes.txt.gz")
+pgPat<-read_table("pangenes/tx_pat_pangenes.txt.gz")
+
+```
+### Using mat tx as reference
+2330 genes shared b/w X and Y
+```{r}
+pgMat2<- filter(pgMat,flag == "PASS" & (genome == "tx_mat"|genome == "tx_pat")) %>% 
+  select(pgID,genome,id,chr,start, end) %>% 
+  group_by(pgID,genome) %>% 
+  filter(n() == 1) %>% 
+  ungroup()
+
+pgMatWide<- pgMat2 %>% distinct() %>% pivot_wider(names_from = genome, values_from = c(id,chr,start,end)) 
+
+pgMatGenes<- pgMatWide %>% filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
+  mutate(id_tx_mat_fix = str_replace(id_tx_mat,"NChap2_final", "X_TX")) %>%
+  mutate(id_tx_pat_fix = str_replace(id_tx_pat, "NChap2_final", "TX")) %>% 
+  mutate(across(.cols = c("id_tx_pat_fix","id_tx_mat_fix"), 
+                 ~str_replace(.,"-RA$",""))) %>%
+  unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) 
 
 ```
 
+### pat tx ref
+Does starting with a different file lend a different result?
+2334 genes. Ok so basically the same number. But are they the same genes? eyeballing says v. similar lists.
+```{r}
+pgPat2<- filter(pgPat,flag == "PASS" & (genome == "tx_mat"|genome == "tx_pat")) %>% 
+  select(pgID,genome,id,chr,start, end) %>% 
+  group_by(pgID,genome) %>% 
+  filter(n() == 1) %>% 
+  ungroup()
+
+pgPatWide<- pgPat2 %>% distinct() %>% pivot_wider(names_from = genome, values_from = c(id,chr,start,end)) 
+
+pgPatGenes<- pgPatWide %>% filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
+  mutate(id_tx_mat_fix = str_replace(id_tx_mat,"NChap2_final", "X_TX")) %>%
+  mutate(id_tx_pat_fix = str_replace(id_tx_pat, "NChap2_final", "TX")) %>%
+   mutate(across(.cols = c("id_tx_pat_fix","id_tx_mat_fix"), 
+                 ~str_replace(.,"-RA$",""))) %>%
+  unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) 
+
+unique(pgPatGenes$pairID)
+
+setdiff(pgPatGenes$pairID,pgMatGenes$pairID)
+
+```
+appears that 1330 genes are also shared in the pat pg file. so its fine. Idk why there are 4 extra lines. Chalk it up to the mysterious of the universe?
+
+
+```{r}
+focalmale<-read_table("readCounts/countsFrankenTX_genes_noMulti", skip = 2,col_names = c("id","chr","start","end","strand","length","Rh_02")) 
+# unnormalized read counts okkkkk
+# deal with later
+focal_x<- filter(focalmale, chr == "X") %>% select(id,length:Rh_02) %>% rename()
+focal_y<- filter(focalmale, chr == "Y") %>% select(id,length:Rh_02)
+reads_pg<-left_join(pgMatGenes,focal_x, by = c("id_tx_mat_fix"="id")) %>%
+  left_join(.,focal_y, by = c("id_tx_pat_fix" = "id"),suffix = c(".mat",".pat"))
+
+write_csv(reads_pg,"reads_pangenes_focalmale.csv")
+### 
+```
+plotplt plot!!
+```{r}
+ggplot(reads_pg,aes(x=(Rh_02.mat),y=(Rh_02.pat))) + geom_point() + 
+  scale_x_continuous(trans='log2') +
+  scale_y_continuous(trans='log2') +
+  geom_abline(slope = 1, intercept = 0) + 
+  geom_smooth(method=lm, se=TRUE, fullrange = TRUE) 
+ggsave("prelim_focalmale_expplot_log2.pdf")
+
+ggplot(reads_pg,aes(x=(Rh_02.mat),y=(Rh_02.pat))) + geom_point() + 
+  scale_x_continuous(trans=scales::pseudo_log_trans(base = 10)) +
+  scale_y_continuous(trans=scales::pseudo_log_trans(base = 10)) +
+  geom_abline(slope = 1, intercept = 0) + 
+  stat_smooth(method=lm, se=TRUE, fullrange = TRUE) 
+#ggsave("prelim_focalmale_psudolog10.pdf")
+# the same lol
+
+
+```
+## population data - josh pop
+```{r}
+jpop_reads<-read_table("readCounts/jpopTXmerged.txt")
+# unnormalized read counts okkkkk
+# deal with later
+jpop_x<- filter(jpop_reads, Chr == "X") %>% select(c(1,6:18))
+jpop_y<- filter(jpop_reads, Chr == "Y") %>% select(1,6:18)
+reads_pg_jpop<-left_join(pgMatGenes,jpop_x, by = c("id_tx_mat_fix"="Geneid")) %>%
+  left_join(.,jpop_y, by = c("id_tx_pat_fix" = "Geneid"),suffix = c(".mat",".pat"))
+```
+
+
+### redo with TX annotation pangenes (not lifted over)
+- also allows us to find hemizygous genes, look at gene loss etc. more accurately, I think
+```{r}
+
+```
 

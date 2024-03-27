@@ -7,3 +7,4 @@ RNAbams/
 .Rproj.user
 *.Rproj
 *.html
+.DS_Store
