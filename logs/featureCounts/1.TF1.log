@@ -17,11 +17,11 @@
 ||                 Summary : 1.TF1.featureCounts.summary                      ||
 ||              Paired-end : yes                                              ||
 ||        Count read pairs : yes                                              ||
-||              Annotation : merged_TX_noMatPAR_main.gtf (GTF)                ||
+||              Annotation : merged_TX_noMatPARlarge_txanno.gtf (GTF)         ||
 ||      Dir for temp files : readCounts                                       ||
 ||                                                                            ||
-||                 Threads : 1                                                ||
-||                   Level : feature level                                    ||
+||                 Threads : 10                                               ||
+||                   Level : meta-feature level                               ||
 ||      Multimapping reads : not counted                                      ||
 || Multi-overlapping reads : not counted                                      ||
 ||   Min overlapping bases : 1                                                ||
@@ -30,16 +30,16 @@
 
 //================================= Running ==================================\\
 ||                                                                            ||
-|| Load annotation file merged_TX_noMatPAR_main.gtf ...                       ||
-||    Features : 30771                                                        ||
-||    Meta-features : 30771                                                   ||
+|| Load annotation file merged_TX_noMatPARlarge_txanno.gtf ...                ||
+||    Features : 231241                                                       ||
+||    Meta-features : 37659                                                   ||
 ||    Chromosomes/contigs : 6                                                 ||
 ||                                                                            ||
 || Process BAM file 1.TF1Aligned.sortedByCoord.out.bam...                     ||
 ||    Paired-end reads are included.                                          ||
 ||    Total alignments : 10207815                                             ||
-||    Successfully assigned alignments : 8835707 (86.6%)                      ||
-||    Running time : 1.29 minutes                                             ||
+||    Successfully assigned alignments : 8863797 (86.8%)                      ||
+||    Running time : 0.11 minutes                                             ||
 ||                                                                            ||
 || Write the final count table.                                               ||
 || Write the read assignment summary.                                         ||

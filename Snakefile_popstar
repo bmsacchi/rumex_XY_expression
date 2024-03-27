@@ -71,16 +71,17 @@ rule index_bam:
 rule read_counts:
     input:
         aln= 'RNAbams/jpop/{sample}Aligned.sortedByCoord.out.bam',
-        anno= 'genome/merged_TX_noMatPAR_main.gtf'
+        anno= 'genome/merged_TX_noMatPARlarge_txanno.gtf'
     output:
         multiext("readCounts/{sample}",
                  ".featureCounts",
                  ".featureCounts.summary")
     log:
         'logs/featureCounts/{sample}.log'
+    threads: 10
     shell:
         """
-        featureCounts -p --countReadPairs -t transcript -f -g gene_id -a {input.anno} -o {output[0]} {input.aln} &> {log}
+        featureCounts -T {threads} -p --countReadPairs -t exon -g gene_id -a {input.anno} -o {output[0]} {input.aln} &> {log}
         """
          
 rule merge_counts:
