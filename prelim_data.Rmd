@@ -7,8 +7,7 @@ The aim of this analysis is to determine how to determine Y and X expression lev
 
 ```{r}
 library(tidyverse, quietly = TRUE)
-library(vroom)
-#library(fread)
+library(vroom, quietly =TRUE)
 library(data.table, quietly = TRUE)
 ```
 
@@ -90,6 +89,8 @@ colnames(jpop_reads) <- colnames_new
 
 # unnormalized read counts okkkkk
 # deal with later
+
+###############
 jpop_x<- filter(jpop_reads, grepl("X",Chr)) %>% select(c(1,6:18))
 jpop_y<- filter(jpop_reads, grepl("Y",Chr)) %>% select(1,6:18)
 reads_pg_jpop<-left_join(pgMatOrths,jpop_x, by = c("id_tx_mat"="Geneid")) %>%
@@ -97,10 +98,10 @@ reads_pg_jpop<-left_join(pgMatOrths,jpop_x, by = c("id_tx_mat"="Geneid")) %>%
 #write_csv(reads_pg_jpop,"reads_pangenes_jpop_TXanno.csv")
 
 
-jpop_long<- jpop_reads %>% pivot_longer(cols = 7:18, 
-               names_to = "sampleName", 
+jpop_long<- jpop_reads %>% pivot_longer(cols = 7:18,
+               names_to = "sampleName",
                values_to = "readcount") %>%
-  mutate(sex = ifelse(grepl("TM", sampleName), "M", 
+  mutate(sex = ifelse(grepl("TM", sampleName), "M",
                ifelse(grepl("TF", sampleName), "F", NA))) %>%
   mutate(chr = ifelse(grepl("X",Chr), "X",
                ifelse(grepl("Y",Chr), "Y",
@@ -127,7 +128,7 @@ ggplot(reads_pg_jpop_long,aes(x=(readcount.x),y=(readcount.y))) + geom_point(aes
 ggplot(reads_pg_jpop_long) + geom_histogram(aes(readcount.y, color = sex), bins = 100, position = "stack") +xlim(0,100)
 
 ### weird!
-jpop_summary <- reads_pg_jpop_long %>% group_by(pairID,sex) %>% summarise(meanCount.x = mean(readcount.x), meanCount.y = mean(readcount.y),nCount.x = sum(readcount.x),nCount.y=sum(readcount.y),propn.x = (nCount.x/(nCount.x+nCount.y)),propn.y = (nCount.y/(nCount.x+nCount.y)) )
+jpop_summary <- reads_pg_jpop_long %>% group_by(pairID,id_tx_mat,id_tx_pat,sex) %>% summarise(meanCount.x = mean(readcount.x), meanCount.y = mean(readcount.y),nCount.x = sum(readcount.x),nCount.y=sum(readcount.y),propn.x = (nCount.x/(nCount.x+nCount.y)),propn.y = (nCount.y/(nCount.x+nCount.y)) )
 
 genesToRemove<-filter(jpop_summary, propn.x < 0.9 & meanCount.y > 20 & sex == "F")
 
@@ -167,10 +168,12 @@ Filter out the bad genes with female Y mapping.
 
 library(DESeq2, quietly = TRUE)
 
+jpop_reads_filter<-  jpop_reads %>%rowwise() %>% mutate(total = sum(TM4:TM3)) %>% filter(.,total >20)
 
-rowdata<- jpop_reads %>% select(Geneid,Chr,Start,End)
-read_counts_all <- jpop_reads %>% column_to_rownames(var = "Geneid") %>% select(TM4:TM3)
-coldata<- DataFrame(colnames(jpop_reads%>% select(TM4:TM3)))
+rowdata<- jpop_reads_filter %>% select(Geneid,Chr,Start,End)
+read_counts_all <- jpop_reads_filter %>% column_to_rownames(var = "Geneid") %>% select(TM4:TM3) 
+
+coldata<- DataFrame(colnames(jpop_reads%>% select(TM4:TM3))) 
 ####
 df<-DESeqDataSetFromMatrix(read_counts_all,coldata,design = ~ 1)
 dds <- DESeq(df)
@@ -191,11 +194,93 @@ dds$sizeFactor<-autochrFactors
 dds$sizeFactor
 
 normalized_counts_auto<-counts(dds, normalized=TRUE)
+
 ```
 
 Compare expression of hemizygous genes b/w males and females
 ```{r}
-hemizygous<-
+# get gene list
+
+#pgMat_tx_wide<-fread("pangenes_tx/tx_mat_pg_synorths.txt")
+#I don't like it!
+
+# hemizygousGenes <-filter(pgMat_tx,(flag == "PASS") & (genome == "tx_mat"|genome == "tx_pat")) %>%
+#    select(pgID,genome,id,chr,start, end, flag) %>% 
+#    group_by(pgID,genome,flag) %>% 
+#    filter(n() == 1) %>% 
+#    ungroup() %>%
+#    distinct() %>%
+#    pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) %>% 
+#    filter(chr_tx_mat == "X" )  %>% #& chr_tx_pat == "Y") %>%
+#    mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
+#                  ~str_replace(.,"-RA$",""))) %>%
+#    filter(is.na(id_tx_pat)) %>%
+#    distinct()
+
+### outgroup - paucifolius
+##. or use NC set
+## vetted with blast searches
+
+
+hemizygousGenes <-filter(pgMat_tx,(flag == "PASS") & 
+                           (genome == "tx_mat"|genome == "tx_pat"|genome =="Rsal")) %>%
+   select(pgID,genome,id,chr,start, end, flag) %>% 
+   group_by(pgID,genome,flag) %>% 
+   filter(n() == 1) #%>% 
+   ungroup() %>%
+   distinct() %>%
+   pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) %>% 
+   filter(chr_tx_mat == "X" )  %>% #& chr_tx_pat == "Y") %>%
+   mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
+                 ~str_replace(.,"-RA$",""))) %>%
+   filter(is.na(id_tx_pat)) %>% filter(!is.na(id_Rsal)) %>%
+   distinct()
+
+
 ```
 
 
+## prev gene loss calc method - like nc data
+
+```{r}
+
+```
+
+
+
+## expression of hemizygous genes
+- not yet with salicifolius control...
+```{r}
+hemicounts <- as.data.frame(normalized_counts_auto) %>% 
+  rownames_to_column(var = "Geneid") %>% filter(Geneid%in%hemizygousGenes$id_tx_mat) %>%
+  rowwise %>% 
+  mutate(maleMean = mean(c_across(contains("TM")))) %>%
+  mutate(femaleMean = mean(c_across(contains("TF"))))
+#library(ggplot2)
+ggplot(hemicounts, aes(x = femaleMean, y = maleMean)) + 
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+  scale_x_continuous(expand = c(0, 0), limits = c(0, NA),breaks =seq(0,16000,2000)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, NA),breaks =seq(0,16000,2000)) +
+  xlab("Average female expression") +
+  ylab("Average male expression")
+ 
+#ggsave("hemizygous_jpop_RsalOutgroup.pdf", height = 5, width =7)
+```
+
+## expression of X-Y gametologs!
+- sig testing - beta binomial
+- 
+```{r}
+gametologCounts<-as.data.frame(normalized_counts_auto) %>% 
+  rownames_to_column(var = "Geneid") %>% 
+  filter(!Geneid%in%genesToRemove$id_tx_mat) %>%
+  filter(!Geneid%in%genesToRemove$id_tx_pat) %>%
+  rowwise %>% 
+  mutate(maleMean = mean(c_across(contains("TM")))) %>%
+  mutate(femaleMean = mean(c_across(contains("TF"))))
+```
+
+
+## marais y/x male/female expression plots
