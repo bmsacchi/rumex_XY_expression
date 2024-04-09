@@ -8,3 +8,4 @@ RNAbams/
 *.Rproj
 *.html
 .DS_Store
+.Rhistory

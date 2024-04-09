@@ -1,195 +1,100 @@
 ---
-title: "Prelim analysis of TX expression data"
+title: "Preliminary analysis of TX expression data"
 output: html_notebook
 ---
-
+#### Goal
+The aim of this analysis is to determine how to determine Y and X expression levels and identify DEGs using population data, with the goal of applying to the eQTL dataset.
 
 ```{r}
-library(tidyverse)
-#library(vroom)
+library(tidyverse, quietly = TRUE)
+library(vroom)
 #library(fread)
-library(data.table)
-
-pgMat<-read_table("pangenesLiftoverOLD/tx_mat_pangenes.txt.gz")
-pgPat<-read_table("pangenesLiftoverOLD/tx_pat_pangenes.txt.gz")
-
+library(data.table, quietly = TRUE)
 ```
-### Using mat tx as reference
-2330 genes shared b/w X and Y
+
+#### Pangene annotations from GENESPACE
+- using TX maker annotation (prev. version used lifted over from NC)
+- allows us to find hemizygous genes, look at gene loss etc. more accurately
+- pgMAT and PAT annotations contain the same homologs, so doesn't matter which file to use
+- suggestion from stephen: keep pairs where there's one NSORTH and no syn orths
 ```{r}
-pgMat2<- filter(pgMat,flag == "PASS" & (genome == "tx_mat"|genome == "tx_pat")) %>% 
-  select(pgID,genome,id,chr,start, end) %>% 
-  group_by(pgID,genome) %>% 
-  filter(n() == 1) %>% 
-  ungroup()
+#pgMat_tx<-read_table("pangenes_tx/tx_mat_pangenes.txt.gz")
+pgMat_tx<-vroom("pangenes_tx/tx_mat_pangenes.txt.gz",show_col_types = FALSE)
+#pgPat_tx<-read_table("pangenes_tx/tx_pat_pangenes.txt.gz")
 
-pgMatWide<- pgMat2 %>% distinct() %>% pivot_wider(names_from = genome, values_from = c(id,chr,start,end)) 
-
-pgMatGenes<- pgMatWide %>% filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
-  mutate(id_tx_mat_fix = str_replace(id_tx_mat,"NChap2_final", "X_TX")) %>%
-  mutate(id_tx_pat_fix = str_replace(id_tx_pat, "NChap2_final", "TX")) %>% 
-  mutate(across(.cols = c("id_tx_pat_fix","id_tx_mat_fix"), 
+pgMat_PASS<-filter(pgMat_tx,(flag == "PASS") & (genome == "tx_mat"|genome == "tx_pat")) %>%
+   select(pgID,genome,id,chr,start, end, flag) %>% 
+   group_by(pgID,genome,flag) %>% 
+   filter(n() == 1) %>% 
+   ungroup() %>%
+   distinct() %>%
+   pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) %>% 
+   #filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat)) %>%
+   filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
+   mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
                  ~str_replace(.,"-RA$",""))) %>%
-  unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) 
+   unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct()
 
-```
+#pgMatWide_PASS<- pgMat_PASS %>% distinct() %>% pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) #%>%
+ #select(-pgID)
 
-### pat tx ref
-Does starting with a different file lend a different result?
-2334 genes. Ok so basically the same number. But are they the same genes? eyeballing says v. similar lists.
-```{r}
-pgPat2<- filter(pgPat,flag == "PASS" & (genome == "tx_mat"|genome == "tx_pat")) %>% 
-  select(pgID,genome,id,chr,start, end) %>% 
-  group_by(pgID,genome) %>% 
-  filter(n() == 1) %>% 
-  ungroup()
+#pgMatGenes_PASS<- pgMatWide_PASS %>% filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
+#  mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
+#                 ~str_replace(.,"-RA$",""))) %>%
+#  unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct() 
 
-pgPatWide<- pgPat2 %>% distinct() %>% pivot_wider(names_from = genome, values_from = c(id,chr,start,end)) 
-
-pgPatGenes<- pgPatWide %>% filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
-  mutate(id_tx_mat_fix = str_replace(id_tx_mat,"NChap2_final", "X_TX")) %>%
-  mutate(id_tx_pat_fix = str_replace(id_tx_pat, "NChap2_final", "TX")) %>%
-   mutate(across(.cols = c("id_tx_pat_fix","id_tx_mat_fix"), 
-                 ~str_replace(.,"-RA$",""))) %>%
-  unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) 
-
-unique(pgPatGenes$pairID)
-
-setdiff(pgPatGenes$pairID,pgMatGenes$pairID)
-
-```
-appears that 1330 genes are also shared in the pat pg file. so its fine. Idk why there are 4 extra lines. Chalk it up to the mysterious of the universe?
+pgIDs_PASS<- select(pgMat_PASS, pgID)
 
 
-```{r}
-# focalmale<-read_table("readCounts/countsFrankenTX_genes_noMulti", skip = 2,col_names = c("id","chr","start","end","strand","length","Rh_02")) 
-# # unnormalized read counts okkkkk
-# # deal with later
-# focal_x<- filter(focalmale, chr == "X") %>% select(id,length:Rh_02) %>% rename()
-# focal_y<- filter(focalmale, chr == "Y") %>% select(id,length:Rh_02)
-# reads_pg<-left_join(pgMatGenes,focal_x, by = c("id_tx_mat_fix"="id")) %>%
-#   left_join(.,focal_y, by = c("id_tx_pat_fix" = "id"),suffix = c(".mat",".pat"))
-# 
-# write_csv(reads_pg,"reads_pangenes_focalmale.csv")
-### 
-```
-plotplt plot!!
-```{r}
-# ggplot(reads_pg,aes(x=(Rh_02.mat),y=(Rh_02.pat))) + geom_point() + 
-#   scale_x_continuous(trans='log2') +
-#   scale_y_continuous(trans='log2') +
-#   geom_abline(slope = 1, intercept = 0) + 
-#   geom_smooth(method=lm, se=TRUE, fullrange = TRUE) 
-# ggsave("prelim_focalmale_expplot_log2.pdf")
-# 
-# ggplot(reads_pg,aes(x=(Rh_02.mat),y=(Rh_02.pat))) + geom_point() + 
-#   scale_x_continuous(trans=scales::pseudo_log_trans(base = 10)) +
-#   scale_y_continuous(trans=scales::pseudo_log_trans(base = 10)) +
-#   geom_abline(slope = 1, intercept = 0) + 
-#   stat_smooth(method=lm, se=TRUE, fullrange = TRUE) 
-#ggsave("prelim_focalmale_psudolog10.pdf")
-# the same lol
+pgMat_NSOrths<-filter(pgMat_tx,(flag == "PASS" & genome == "tx_mat") |(flag =="NSOrtho" & genome == "tx_pat")) %>%
+   select(pgID,genome,id,chr,start, end, flag) %>% 
+   group_by(pgID,genome,flag) %>% 
+   filter(n() == 1) %>% 
+   filter(!pgID%in%pgIDs_PASS$pgID) %>%
+   ungroup() %>% distinct() %>% 
+   pivot_wider(names_from = genome, 
+   values_from = c(id,chr,start,end,flag)) %>%
+   filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat)) %>%
+   filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
+   mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
+                ~str_replace(.,"-RA$",""))) %>%
+   unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct()
+
+dim(pgMat_PASS) #2320 genes
+dim(pgMat_NSOrths) # 343 NSorths
+
+#pgMatWide_NSO<- pgMat_NSOrths %>% distinct() %>% 
+#  pivot_wider(names_from = genome, 
+#  values_from = c(id,chr,start,end,flag)) %>%
+#  filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat))
+  #select(-pgID)
+# 2886 NSorths
+
+pgMatOrths<-bind_rows(pgMat_PASS,pgMat_NSOrths) %>% select(-pgID)
 
 
 ```
 
-
-
-### redo with TX annotation pangenes (not lifted over)
-- also allows us to find hemizygous genes, look at gene loss etc. more accurately, I think
-```{r}
-pgMat_tx<-read_table("pangenes_tx/tx_mat_pangenes.txt.gz")
-pgPat_tx<-read_table("pangenes_tx/tx_pat_pangenes.txt.gz")
-
-pgMat2_tx<- filter(pgMat_tx,flag == "PASS" & (genome == "tx_mat"|genome == "tx_pat")) %>% 
-  select(pgID,genome,id,chr,start, end) %>% 
-  group_by(pgID,genome) %>% 
-  filter(n() == 1) %>% 
-  ungroup() 
-
-pgMatWide_tx<- pgMat2_tx %>% distinct() %>% pivot_wider(names_from = genome, values_from = c(id,chr,start,end)) %>%
- select(-pgID)
-
-
-pgMatGenes_tx<- pgMatWide_tx %>% filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
-  mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
-                 ~str_replace(.,"-RA$",""))) %>%
-  unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct()
-
-# pgPat2_tx<- filter(pgPat_tx,flag == "PASS" & (genome == "tx_mat"|genome == "tx_pat")) %>% 
-#   select(pgID,genome,id,chr,start, end) %>% 
-#   group_by(pgID,genome) %>% 
-#   filter(n() == 1) %>% 
-#   ungroup() 
-# 
-# pgPatWide_tx<- pgPat2_tx %>% distinct() %>% pivot_wider(names_from = genome, values_from = c(id,chr,start,end)) %>% select(-pgID)
-# 
-# pgPatGenes_tx<- pgPatWide_tx %>% filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
-#    mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
-#                  ~str_replace(.,"-RA$",""))) %>%
-#   unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>% distinct()
-# 
-# # dim(pgPatGenes_tx) # 2324
-# dim(pgMatGenes_tx) # 2330
-# exactly 10 genes diff
-# dplyr::setdiff((pgPatGenes_tx$pairID),sort(pgMatGenes_tx$pairID))
-# dplyr::setdiff((pgMatGenes_tx$pairID),sort(pgPatGenes_tx$pairID))
-# dplyr::setdiff((pgMatGenes_tx$end_tx_pat),sort(pgPatGenes_tx$end_tx_pat))
-# 
-# # anti_join(pgMatGenes_tx,pgPatGenes_tx, by = "pairID")
-# length(unique(pgMatGenes_tx$pairID))
-# length(unique(pgPatGenes_tx$pairID)) # 2320 uniqe paid id's
-
-# pgPatGenes_tx %>% 
-#   group_by(pairID) %>% 
-#   filter(n()>1)
-### it's the pdID!!!!! there are rows that are toatlly the same aside from pgID. need to get riddd!
-
-
-#FIXED IT!
-```
-
-
-```{r}
-focalmale<-read_table("readCounts/countsFrankenTXanno", skip = 2,col_names = c("id","chr","start","end","strand","length","Rh_02")) 
-# unnormalized read counts okkkkk
-# deal with later
-focal_x<- filter(focalmale, grepl("X",chr)) %>% select(id,length:Rh_02)
-focal_y<- filter(focalmale, grepl("Y",chr)) %>% select(id,length:Rh_02)
-reads_pg<-left_join(pgMatGenes_tx,focal_x, by = c("id_tx_mat"="id")) %>%
-  left_join(.,focal_y, by = c("id_tx_pat" = "id"),suffix = c(".mat",".pat"))
-
-write_csv(reads_pg,"reads_pangenes_focalmale_TXanno.csv")
-```
-
-```{r}
-ggplot(reads_pg,aes(x=(Rh_02.mat),y=(Rh_02.pat))) + geom_point() + 
-  scale_x_continuous(trans='log2') +
-  scale_y_continuous(trans='log2') +
-  geom_abline(slope = 1, intercept = 0) + 
-  geom_smooth(method=lm, se=TRUE, fullrange = TRUE) 
-ggsave("prelim_focalmale_expplot_log2_tx.pdf")
-
-ggplot(reads_pg,aes(x=(Rh_02.mat),y=(Rh_02.pat))) + geom_point() + 
-  scale_x_continuous(trans=scales::pseudo_log_trans(base = 10)) +
-  scale_y_continuous(trans=scales::pseudo_log_trans(base = 10)) +
-  geom_abline(slope = 1, intercept = 0) + 
-  stat_smooth(method=lm, se=TRUE, fullrange = TRUE) 
-ggsave("prelim_focalmale_expplot_psudolog10_tx.pdf")
-
-```
 ## population data - josh pop
 # summarize and such
 ```{r}
 jpop_reads<-read_table("readCounts/jpopTXmerged.txt") 
 
+colnames(jpop_reads)
+colnames_new <- str_replace(colnames(jpop_reads), 
+                            "Aligned.sortedByCoord.out", '') %>% 
+                 str_replace(., "\\d{1,2}\\.","")
+
+colnames(jpop_reads) <- colnames_new 
+
+
 # unnormalized read counts okkkkk
 # deal with later
 jpop_x<- filter(jpop_reads, grepl("X",Chr)) %>% select(c(1,6:18))
 jpop_y<- filter(jpop_reads, grepl("Y",Chr)) %>% select(1,6:18)
-reads_pg_jpop<-left_join(pgMatGenes_tx,jpop_x, by = c("id_tx_mat"="Geneid")) %>%
+reads_pg_jpop<-left_join(pgMatOrths,jpop_x, by = c("id_tx_mat"="Geneid")) %>%
   left_join(.,jpop_y, by = c("id_tx_pat" = "Geneid"),suffix = c(".mat",".pat"))
-write_csv(reads_pg_jpop,"reads_pangenes_jpop_TXanno.csv")
+#write_csv(reads_pg_jpop,"reads_pangenes_jpop_TXanno.csv")
 
 
 jpop_long<- jpop_reads %>% pivot_longer(cols = 7:18, 
@@ -204,7 +109,7 @@ jpop_long<- jpop_reads %>% pivot_longer(cols = 7:18,
                ifelse(grepl("A3",Chr), "A3",
                ifelse(grepl("A4",Chr), "A4", NA))))))) %>% select(c(1,6:10))
 
-reads_pg_jpop_long <- left_join(pgMatGenes_tx,jpop_long, by = c("id_tx_mat"="Geneid")) %>%
+reads_pg_jpop_long <- left_join(pgMatOrths,jpop_long, by = c("id_tx_mat"="Geneid")) %>%
   left_join(.,jpop_long, by = c("id_tx_pat" = "Geneid","sampleName","sex"),suffix = c(".x",".y"),relationship = "many-to-many")
 
 
@@ -224,18 +129,21 @@ ggplot(reads_pg_jpop_long) + geom_histogram(aes(readcount.y, color = sex), bins 
 ### weird!
 jpop_summary <- reads_pg_jpop_long %>% group_by(pairID,sex) %>% summarise(meanCount.x = mean(readcount.x), meanCount.y = mean(readcount.y),nCount.x = sum(readcount.x),nCount.y=sum(readcount.y),propn.x = (nCount.x/(nCount.x+nCount.y)),propn.y = (nCount.y/(nCount.x+nCount.y)) )
 
-ggplot(jpop_summary,aes(x=(meanCount.x),y=(meanCount.y))) + geom_point(aes(color = sex)) +
-  scale_x_continuous(trans='log2') +
-  scale_y_continuous(trans='log2') #+
-ggplot(jpop_summary,aes(x=(nCount.x),y=(nCount.y))) + geom_point(aes(color = sex)) +
-  #scale_x_continuous(trans='log2') +
-  #scale_y_continuous(trans='log2') +
-  geom_abline(slope = 1, intercept = 0) + 
-  geom_smooth(aes(group = sex),method=lm, se=TRUE, fullrange = TRUE) +
-  ylim(0,50000) +
-  xlim(0,50000)
+genesToRemove<-filter(jpop_summary, propn.x < 0.9 & meanCount.y > 20 & sex == "F")
 
-ggsave("readcountSumBySex.pdf")
+
+# ggplot(jpop_summary,aes(x=(meanCount.x),y=(meanCount.y))) + geom_point(aes(color = sex)) +
+#   scale_x_continuous(trans='log2') +
+#   scale_y_continuous(trans='log2') #+
+# ggplot(jpop_summary,aes(x=(nCount.x),y=(nCount.y))) + geom_point(aes(color = sex)) +
+#   #scale_x_continuous(trans='log2') +
+#   #scale_y_continuous(trans='log2') +
+#   geom_abline(slope = 1, intercept = 0) + 
+#   geom_smooth(aes(group = sex),method=lm, se=TRUE, fullrange = TRUE) +
+#   ylim(0,50000) +
+#   xlim(0,50000)
+
+#ggsave("readcountSumBySex.pdf")
 
 
   
@@ -243,9 +151,51 @@ ggsave("readcountSumBySex.pdf")
 
 
 ## ok clearly some normalization is needed across all samples/genes
-```{r}
+## read in exon counts
+actually don't, because we don't know if exon 1 in gene A is the same as exon 1 in gene B (gametolog)
+WOMP
 
+Filter out the bad genes with female Y mapping.
+```{r}
+#jpop_reads_exons<-read_table("readCounts/jpopTXmerged_exon.txt") 
+
+# norm counts
+
+
+## normalize: quantile distribution, Y- X exp in females, not fair?
+# generate norm factors with just the autosomal data
+
+library(DESeq2, quietly = TRUE)
+
+
+rowdata<- jpop_reads %>% select(Geneid,Chr,Start,End)
+read_counts_all <- jpop_reads %>% column_to_rownames(var = "Geneid") %>% select(TM4:TM3)
+coldata<- DataFrame(colnames(jpop_reads%>% select(TM4:TM3)))
+####
+df<-DESeqDataSetFromMatrix(read_counts_all,coldata,design = ~ 1)
+dds <- DESeq(df)
+#dds<-estimateSizeFactors(dds)
+allchrFactors<-sizeFactors(dds)
+#norm_counts<-count()
+
+normalized_counts_all<-counts(dds, normalized=TRUE)
+
+### with just autosomes
+read_counts_auto<- jpop_reads %>% filter(grepl("A",Chr))%>% column_to_rownames(var = "Geneid") %>% select(TM4:TM3)
+df_auto<-DESeqDataSetFromMatrix(read_counts_auto,coldata,design = ~ 1)
+dds_auto <- DESeq(df_auto)
+autochrFactors<-sizeFactors(dds_auto)
+
+# replace og coutn tabels size factors
+dds$sizeFactor<-autochrFactors
+dds$sizeFactor
+
+normalized_counts_auto<-counts(dds, normalized=TRUE)
 ```
 
+Compare expression of hemizygous genes b/w males and females
+```{r}
+hemizygous<-
+```
 
 
