@@ -10,7 +10,7 @@ mythreads = 4
 
 PREFIX = "jpop"
 
-with open("jpopInds.txt", "r") as file:
+with open("jpopInds_nc.txt", "r") as file:
     samples = [line.strip() for line in file if line.strip()]
 
 rule all:
@@ -21,7 +21,7 @@ rule all:
           fq1 = expand("fastqs/pop/{sample}_R1_clean.fastq.gz",sample = samples),
           fq2 = expand("fastqs/pop/{sample}_R2_clean.fastq.gz",sample = samples),
           fc = expand("readCounts/{sample}.featureCounts", sample = samples), 
-          mc = "readCounts/jpopTXmerged.txt" 
+          mc = "readCounts/jpopNCmerged.txt" 
 # This rule maps rna reads to genome
 rule star_pe_multi:
     input:
@@ -83,12 +83,30 @@ rule read_counts:
         """
         featureCounts -T {threads} -p --countReadPairs -t exon -g gene_id -a {input.anno} -o {output[0]} {input.aln} &> {log}
         """
-         
+
+#rule read_counts_exons:
+#    input: 
+#       aln= 'RNAbams/jpop/{sample}Aligned.sortedByCoord.out.bam',
+#       anno= 'genome/merged_TX_noMatPARlarge_txanno.gtf'
+#    output:
+#       multiext("readCounts/{sample}_exon",
+#                ".featureCounts",
+#                ".featureCounts.summary")
+#    log:
+#        'logs/featureCounts/{sample}_exon.log'
+#    threads: 10    
+#
+#    shell:
+#        """
+#        featureCounts -T {threads} -p --countReadPairs -t exon -g gene_id -f -O -a {input.anno} -o {output[0]} {input.aln} &> {log}
+#        """
+
+ 
 rule merge_counts:
     input:
         expand("readCounts/{sample}.featureCounts", sample = samples)
     output:
-        "readCounts/jpopTXmerged.txt"
+        "readCounts/jpopNCmerged.txt"
     run:
         # Merge count files.
         frames = (pd.read_csv(fp, sep="\t", skiprows=1,

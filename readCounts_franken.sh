@@ -16,4 +16,6 @@ featureCounts -v
 
 #featureCounts -T 10 -p --countReadPairs -t exon -g gene_id -a genome/merged_TX_noMatPARlarge_txanno.gtf -o readCounts/countsFrankenTXannoNoMulti RNAbams/merged_TX_noMatPAR/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.NoMulti.out.bam 
 
-featureCounts -T 10 -p --countReadPairs -t exon -g gene_id -a genome/merged_TX_noMatPARlarge_txanno.gtf -o readCounts/countsFrankenTXanno RNAbams/merged_TX_noMatPAR/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam
+#featureCounts -T 10 -p --countReadPairs -t exon -g gene_id -a genome/merged_TX_noMatPARlarge_txanno.gtf -o readCounts/countsFrankenTXanno RNAbams/merged_TX_noMatPAR/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam 
+
+featureCounts -T 10 -p --countReadPairs -t exon -g gene_id -f -O -a genome/merged_TX_noMatPARlarge_txanno.gtf -o readCounts/countsFrankenTXanno_exons RNAbams/merged_TX_noMatPAR/Rh_02_RNA_S122_L004_Aligned.sortedByCoord.out.bam

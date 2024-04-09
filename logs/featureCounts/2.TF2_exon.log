@@ -1,0 +1,51 @@
+
+        ==========     _____ _    _ ____  _____  ______          _____  
+        =====         / ____| |  | |  _ \|  __ \|  ____|   /\   |  __ \ 
+          =====      | (___ | |  | | |_) | |__) | |__     /  \  | |  | |
+            ====      \___ \| |  | |  _ <|  _  /|  __|   / /\ \ | |  | |
+              ====    ____) | |__| | |_) | | \ \| |____ / ____ \| |__| |
+        ==========   |_____/ \____/|____/|_|  \_\______/_/    \_\_____/
+	  v2.0.2
+
+//========================== featureCounts setting ===========================\\
+||                                                                            ||
+||             Input files : 1 BAM file                                       ||
+||                                                                            ||
+||                           2.TF2Aligned.sortedByCoord.out.bam               ||
+||                                                                            ||
+||             Output file : 2.TF2_exon.featureCounts                         ||
+||                 Summary : 2.TF2_exon.featureCounts.summary                 ||
+||              Paired-end : yes                                              ||
+||        Count read pairs : yes                                              ||
+||              Annotation : merged_TX_noMatPARlarge_txanno.gtf (GTF)         ||
+||      Dir for temp files : readCounts                                       ||
+||                                                                            ||
+||                 Threads : 10                                               ||
+||                   Level : feature level                                    ||
+||      Multimapping reads : not counted                                      ||
+|| Multi-overlapping reads : counted                                          ||
+||   Min overlapping bases : 1                                                ||
+||                                                                            ||
+\\============================================================================//
+
+//================================= Running ==================================\\
+||                                                                            ||
+|| Load annotation file merged_TX_noMatPARlarge_txanno.gtf ...                ||
+||    Features : 231241                                                       ||
+||    Meta-features : 37659                                                   ||
+||    Chromosomes/contigs : 6                                                 ||
+||                                                                            ||
+|| Process BAM file 2.TF2Aligned.sortedByCoord.out.bam...                     ||
+||    Paired-end reads are included.                                          ||
+||    Total alignments : 13214915                                             ||
+||    Successfully assigned alignments : 11437531 (86.6%)                     ||
+||    Running time : 0.84 minutes                                             ||
+||                                                                            ||
+|| Write the final count table.                                               ||
+|| Write the read assignment summary.                                         ||
+||                                                                            ||
+|| Summary of counting results can be found in file "readCounts/2.TF2_exon.f  ||
+|| eatureCounts.summary"                                                      ||
+||                                                                            ||
+\\============================================================================//
+
