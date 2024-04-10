@@ -1,0 +1,64 @@
+---
+title: "Gene loss, hemizygous and gametolog expression - prelim population data TX"
+output: html_notebook
+---
+
+```{r message=TRUE, warning=FALSE}
+library(tidyverse, quietly = TRUE)
+library(vroom, quietly =TRUE)
+library(data.table, quietly = TRUE)
+```
+
+### gene loss and hemizyogus genes
+- same approach to NC paper
+```{r}
+mat_synorths_raw<-data.table::fread("pangenes_tx/tx_mat_pg_synorths.txt")
+mat_nsorths_raw<-data.table::fread("pangenes_tx/tx_mat_pg_all.txt") 
+#identify which entries have nsorthos for txmat pat and rsal genomes
+# same as prev filtering for NC, but i use a slightly different function bc there were only 3 genomes being compared in that case (here there's many more)
+nsorths<-mat_nsorths_raw %>% filter_at(vars(c("tx_mat","tx_pat","Rsal")),any_vars(grepl("\\*",.))) 
+# remove any pgIDs w nsorths at any of our three 'genomes of interest'
+
+cols<-colnames(mat_synorths_raw)
+onlysyn<-mat_synorths_raw %>% filter(!(pgID%in%nsorths$pgID)) %>%
+  mutate(across(all_of(cols), ~str_replace(.,"-RA$","")))
+
+hasanortho<-onlysyn %>% 
+  filter((tx_mat!=""|tx_pat!="")&Rsal!="")
+
+notlost<-onlysyn %>% filter((tx_mat!="" & tx_pat!="" & Rsal!=""))
+
+## hemizygous?
+tx_mat_loss<-onlysyn %>% filter(tx_mat!="" & tx_pat=="" & Rsal!="")
+
+## gene loss by chr
+
+summary_loss<- tx_mat_loss %>% group_by(chr) %>% summarise(n_loss = n()) #272 hemizygous
+print(summary_loss)
+tx_yloss<- filter(tx_mat_loss) %>% filter(chr == "X") #376
+```
+## upload the completely lost genes from NC
+```{r}
+nc_complete_loss<-read.csv("../rumex_pangenome_annotation/complete_yloss_Sept2023.csv")
+
+head(nc_complete_loss)
+ncGenesToKeep<-nc_complete_loss %>% filter(chr =="X") %>% select(repGene)
+dim(ncGenesToKeep)
+#167 genes completely lost in nc
+
+overlap_yloss<-tx_yloss %>% filter(nc_hap1%in%ncGenesToKeep$repGene)
+#125 genes overlapping loss in tx and complete loss in nc
+
+## all genes come on don't be lazy
+allncGenesToKeep<-nc_complete_loss %>% select(repGene)
+
+overlapp_all_loss<-tx_mat_loss %>% filter(nc_hap1%in%allncGenesToKeep$repGene)
+# nvm basically the same, just one diff
+```
+
+```{r}
+write_csv(overlap_yloss, "tx_yloss_overlapNCcomplete_loss.csv")
+#write_csv(overlap_all, "tx_")
+
+```
+

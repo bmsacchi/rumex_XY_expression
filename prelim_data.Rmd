@@ -5,7 +5,7 @@ output: html_notebook
 #### Goal
 The aim of this analysis is to determine how to determine Y and X expression levels and identify DEGs using population data, with the goal of applying to the eQTL dataset.
 
-```{r}
+```{r message=TRUE, warning=FALSE}
 library(tidyverse, quietly = TRUE)
 library(vroom, quietly =TRUE)
 library(data.table, quietly = TRUE)
@@ -28,7 +28,6 @@ pgMat_PASS<-filter(pgMat_tx,(flag == "PASS") & (genome == "tx_mat"|genome == "tx
    ungroup() %>%
    distinct() %>%
    pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) %>% 
-   #filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat)) %>%
    filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
    mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
                  ~str_replace(.,"-RA$",""))) %>%
