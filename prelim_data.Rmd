@@ -5,7 +5,7 @@ output: html_notebook
 #### Goal
 The aim of this analysis is to determine how to determine Y and X expression levels and identify DEGs using population data, with the goal of applying to the eQTL dataset.
 
-```{r message=TRUE, warning=FALSE}
+```{r load-packages, message=TRUE, warning=FALSE}
 library(tidyverse, quietly = TRUE)
 library(vroom, quietly =TRUE)
 library(data.table, quietly = TRUE)
@@ -16,7 +16,7 @@ library(data.table, quietly = TRUE)
 - allows us to find hemizygous genes, look at gene loss etc. more accurately
 - pgMAT and PAT annotations contain the same homologs, so doesn't matter which file to use
 - suggestion from stephen: keep pairs where there's one NSORTH and no syn orths
-```{r}
+```{r load-and-filter-pangenes}
 #pgMat_tx<-read_table("pangenes_tx/tx_mat_pangenes.txt.gz")
 pgMat_tx<-vroom("pangenes_tx/tx_mat_pangenes.txt.gz",show_col_types = FALSE)
 #pgPat_tx<-read_table("pangenes_tx/tx_pat_pangenes.txt.gz")
@@ -33,6 +33,7 @@ pgMat_PASS<-filter(pgMat_tx,(flag == "PASS") & (genome == "tx_mat"|genome == "tx
                  ~str_replace(.,"-RA$",""))) %>%
    unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct()
 
+
 #pgMatWide_PASS<- pgMat_PASS %>% distinct() %>% pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) #%>%
  #select(-pgID)
 
@@ -44,24 +45,41 @@ pgMat_PASS<-filter(pgMat_tx,(flag == "PASS") & (genome == "tx_mat"|genome == "tx
 pgIDs_PASS<- select(pgMat_PASS, pgID)
 
 
-pgMat_NSOrths<-filter(pgMat_tx,(flag == "PASS" & genome == "tx_mat") |(flag =="NSOrtho" & genome == "tx_pat")) %>%
-   select(pgID,genome,id,chr,start, end, flag) %>% 
-   group_by(pgID,genome,flag) %>% 
-   filter(n() == 1) %>% 
-   filter(!pgID%in%pgIDs_PASS$pgID) %>%
-   ungroup() %>% distinct() %>% 
-   pivot_wider(names_from = genome, 
-   values_from = c(id,chr,start,end,flag)) %>%
-   filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat)) %>%
-   filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
-   mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
+# pgMat_NSOrths<-pgMat_tx %>% select(pgID,genome,id,chr,start, end, flag) %>% #filter(pgMat_tx,((flag == "PASS" & genome == "tx_mat") |(flag =="NSOrtho" & genome == "tx_pat")) %>%
+#    group_by(pgID,genome,flag) %>% 
+#    filter(n() == 1) %>% 
+#     filter(!pgID%in%pgIDs_PASS$pgID) %>%
+#    ungroup() %>% distinct() %>% 
+#    pivot_wider(names_from = genome, 
+#    values_from = c(id,chr,start,end,flag)) %>%
+#    filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat)) %>%
+#    filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
+#    mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
+#                 ~str_replace(.,"-RA$",""))) %>%
+#    unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct()
+
+pgMat_NSOrths<- pgMat_tx %>% 
+  select(pgID,genome,id,chr,start, end, flag) %>% 
+  filter((genome == "tx_mat") |(genome == "tx_pat")) %>%
+  filter(flag != "array") %>%
+  group_by(pgID,genome) %>% 
+  filter(n() == 1) %>% 
+  filter(!pgID%in%pgIDs_PASS$pgID) %>%
+  ungroup() %>% 
+  distinct() %>% 
+  pivot_wider(names_from = c(genome), 
+  values_from = c(id,chr,start,end,flag)) %>%
+  filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat)) %>%
+  filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
+  mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
                 ~str_replace(.,"-RA$",""))) %>%
-   unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct()
+  unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) #%>%  distinct()
+
 
 dim(pgMat_PASS) #2320 genes
-dim(pgMat_NSOrths) # 343 NSorths
+dim(pgMat_NSOrths) # 1644 NSorths
 
-#pgMatWide_NSO<- pgMat_NSOrths %>% distinct() %>% 
+#pgMatWide_NSO<- pgMat_NSOrths %>% distinct() %>%  
 #  pivot_wider(names_from = genome, 
 #  values_from = c(id,chr,start,end,flag)) %>%
 #  filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat))
@@ -75,7 +93,7 @@ pgMatOrths<-bind_rows(pgMat_PASS,pgMat_NSOrths) %>% select(-pgID)
 
 ## population data - josh pop
 # summarize and such
-```{r}
+```{r load-jpop-readcounts}
 jpop_reads<-read_table("readCounts/jpopTXmerged.txt") 
 
 colnames(jpop_reads)
@@ -85,89 +103,31 @@ colnames_new <- str_replace(colnames(jpop_reads),
 
 colnames(jpop_reads) <- colnames_new 
 
-
-# unnormalized read counts okkkkk
-# deal with later
-
-###############
-jpop_x<- filter(jpop_reads, grepl("X",Chr)) %>% select(c(1,6:18))
-jpop_y<- filter(jpop_reads, grepl("Y",Chr)) %>% select(1,6:18)
-reads_pg_jpop<-left_join(pgMatOrths,jpop_x, by = c("id_tx_mat"="Geneid")) %>%
-  left_join(.,jpop_y, by = c("id_tx_pat" = "Geneid"),suffix = c(".mat",".pat"))
-#write_csv(reads_pg_jpop,"reads_pangenes_jpop_TXanno.csv")
-
-
-jpop_long<- jpop_reads %>% pivot_longer(cols = 7:18,
-               names_to = "sampleName",
-               values_to = "readcount") %>%
-  mutate(sex = ifelse(grepl("TM", sampleName), "M",
-               ifelse(grepl("TF", sampleName), "F", NA))) %>%
-  mutate(chr = ifelse(grepl("X",Chr), "X",
-               ifelse(grepl("Y",Chr), "Y",
-               ifelse(grepl("A1",Chr), "A1",
-               ifelse(grepl("A2",Chr), "A2",
-               ifelse(grepl("A3",Chr), "A3",
-               ifelse(grepl("A4",Chr), "A4", NA))))))) %>% select(c(1,6:10))
-
-reads_pg_jpop_long <- left_join(pgMatOrths,jpop_long, by = c("id_tx_mat"="Geneid")) %>%
-  left_join(.,jpop_long, by = c("id_tx_pat" = "Geneid","sampleName","sex"),suffix = c(".x",".y"),relationship = "many-to-many")
-
-
-```
-## dist
-```{r}
-ggplot(reads_pg_jpop_long,aes(x=(readcount.x),y=(readcount.y))) + geom_point(aes(color = sex)) +
-  scale_x_continuous(trans='log2') +
-  scale_y_continuous(trans='log2') +
-  geom_abline(slope = 1, intercept = 0) + 
-  geom_smooth(method=lm, se=TRUE, fullrange = TRUE) 
-
-##
-
-ggplot(reads_pg_jpop_long) + geom_histogram(aes(readcount.y, color = sex), bins = 100, position = "stack") +xlim(0,100)
-
-### weird!
-jpop_summary <- reads_pg_jpop_long %>% group_by(pairID,id_tx_mat,id_tx_pat,sex) %>% summarise(meanCount.x = mean(readcount.x), meanCount.y = mean(readcount.y),nCount.x = sum(readcount.x),nCount.y=sum(readcount.y),propn.x = (nCount.x/(nCount.x+nCount.y)),propn.y = (nCount.y/(nCount.x+nCount.y)) )
-
-genesToRemove<-filter(jpop_summary, propn.x < 0.9 & meanCount.y > 20 & sex == "F")
-
-
-# ggplot(jpop_summary,aes(x=(meanCount.x),y=(meanCount.y))) + geom_point(aes(color = sex)) +
-#   scale_x_continuous(trans='log2') +
-#   scale_y_continuous(trans='log2') #+
-# ggplot(jpop_summary,aes(x=(nCount.x),y=(nCount.y))) + geom_point(aes(color = sex)) +
-#   #scale_x_continuous(trans='log2') +
-#   #scale_y_continuous(trans='log2') +
-#   geom_abline(slope = 1, intercept = 0) + 
-#   geom_smooth(aes(group = sex),method=lm, se=TRUE, fullrange = TRUE) +
-#   ylim(0,50000) +
-#   xlim(0,50000)
-
-#ggsave("readcountSumBySex.pdf")
-
-
-  
 ```
 
 
-## ok clearly some normalization is needed across all samples/genes
-## read in exon counts
-actually don't, because we don't know if exon 1 in gene A is the same as exon 1 in gene B (gametolog)
-WOMP
-
-Filter out the bad genes with female Y mapping.
-```{r}
+## Normalization for hemizygous gene exp. plots
+```{r DESeq}
 #jpop_reads_exons<-read_table("readCounts/jpopTXmerged_exon.txt") 
 
 # norm counts
-
-
 ## normalize: quantile distribution, Y- X exp in females, not fair?
 # generate norm factors with just the autosomal data
 
 library(DESeq2, quietly = TRUE)
 
-jpop_reads_filter<-  jpop_reads %>%rowwise() %>% mutate(total = sum(TM4:TM3)) %>% filter(.,total >20)
+jpop_reads_filter<-  jpop_reads %>% 
+    mutate(Chr = ifelse(grepl("X",Chr), "X",
+              ifelse(grepl("Y",Chr), "Y",
+              ifelse(grepl("A1",Chr), "A1",
+              ifelse(grepl("A2",Chr), "A2",
+              ifelse(grepl("A3",Chr), "A3",
+              ifelse(grepl("A4",Chr), "A4", NA))))))) %>%
+  rowwise() %>% 
+  mutate(total = sum(TM4:TM3)) %>% 
+  filter(.,total >20) 
+  
+jpop_info<-select(jpop_reads_filter, Geneid:Length)
 
 rowdata<- jpop_reads_filter %>% select(Geneid,Chr,Start,End)
 read_counts_all <- jpop_reads_filter %>% column_to_rownames(var = "Geneid") %>% select(TM4:TM3) 
@@ -177,13 +137,13 @@ coldata<- DataFrame(colnames(jpop_reads%>% select(TM4:TM3)))
 df<-DESeqDataSetFromMatrix(read_counts_all,coldata,design = ~ 1)
 dds <- DESeq(df)
 #dds<-estimateSizeFactors(dds)
-allchrFactors<-sizeFactors(dds)
+#allchrFactors<-sizeFactors(dds)
 #norm_counts<-count()
 
-normalized_counts_all<-counts(dds, normalized=TRUE)
+#normalized_counts_all<-counts(dds, normalized=TRUE)
 
 ### with just autosomes
-read_counts_auto<- jpop_reads %>% filter(grepl("A",Chr))%>% column_to_rownames(var = "Geneid") %>% select(TM4:TM3)
+read_counts_auto<- jpop_reads_filter %>% filter(grepl("A",Chr))%>% column_to_rownames(var = "Geneid") %>% select(TM4:TM3)
 df_auto<-DESeqDataSetFromMatrix(read_counts_auto,coldata,design = ~ 1)
 dds_auto <- DESeq(df_auto)
 autochrFactors<-sizeFactors(dds_auto)
@@ -193,65 +153,34 @@ dds$sizeFactor<-autochrFactors
 dds$sizeFactor
 
 normalized_counts_auto<-counts(dds, normalized=TRUE)
+## reattach all the info to the norm counts!
+norm_counts_jpop_info<-as.data.frame(normalized_counts_auto,row.names =NULL) %>% 
+  rownames_to_column(var = "Geneid") %>% full_join(.,jpop_info, by = "Geneid")
 
 ```
 
 Compare expression of hemizygous genes b/w males and females
-```{r}
-# get gene list
+- prev gene loss calc method - like nc data
+- hemizyous list is from jpop_tx_exp_geneloss.Rmd
+```{r load-hemizygous}
+length(setdiff(hemizygousGenes$id_tx_mat,tx_yloss$repGene))
+# 230 genes in the frst df and not in 2nd
+# prev. method probably doesn't deal with nsorths the same way?
+#e.g. TX_maternal_00017438
+length(setdiff(tx_yloss$repGene,hemizygousGenes$id_tx_mat))
+# 0
 
-#pgMat_tx_wide<-fread("pangenes_tx/tx_mat_pg_synorths.txt")
-#I don't like it!
-
-# hemizygousGenes <-filter(pgMat_tx,(flag == "PASS") & (genome == "tx_mat"|genome == "tx_pat")) %>%
-#    select(pgID,genome,id,chr,start, end, flag) %>% 
-#    group_by(pgID,genome,flag) %>% 
-#    filter(n() == 1) %>% 
-#    ungroup() %>%
-#    distinct() %>%
-#    pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) %>% 
-#    filter(chr_tx_mat == "X" )  %>% #& chr_tx_pat == "Y") %>%
-#    mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
-#                  ~str_replace(.,"-RA$",""))) %>%
-#    filter(is.na(id_tx_pat)) %>%
-#    distinct()
-
-### outgroup - paucifolius
-##. or use NC set
-## vetted with blast searches
-
-
-hemizygousGenes <-filter(pgMat_tx,(flag == "PASS") & 
-                           (genome == "tx_mat"|genome == "tx_pat"|genome =="Rsal")) %>%
-   select(pgID,genome,id,chr,start, end, flag) %>% 
-   group_by(pgID,genome,flag) %>% 
-   filter(n() == 1) #%>% 
-   ungroup() %>%
-   distinct() %>%
-   pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) %>% 
-   filter(chr_tx_mat == "X" )  %>% #& chr_tx_pat == "Y") %>%
-   mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
-                 ~str_replace(.,"-RA$",""))) %>%
-   filter(is.na(id_tx_pat)) %>% filter(!is.na(id_Rsal)) %>%
-   distinct()
-
+# use hemizygous list filtered by nc overlap
+tx_yloss_nc_overlap<-read.csv("tx_yloss_overlapNCcomplete_loss.csv")
 
 ```
-
-
-## prev gene loss calc method - like nc data
-
-```{r}
-
-```
-
 
 
 ## expression of hemizygous genes
 - not yet with salicifolius control...
-```{r}
+```{r plot-hemizygous-exp}
 hemicounts <- as.data.frame(normalized_counts_auto) %>% 
-  rownames_to_column(var = "Geneid") %>% filter(Geneid%in%hemizygousGenes$id_tx_mat) %>%
+  rownames_to_column(var = "Geneid") %>% filter(Geneid%in%tx_yloss_nc_overlap$repGene) %>%
   rowwise %>% 
   mutate(maleMean = mean(c_across(contains("TM")))) %>%
   mutate(femaleMean = mean(c_across(contains("TF"))))
@@ -260,25 +189,79 @@ ggplot(hemicounts, aes(x = femaleMean, y = maleMean)) +
   geom_point() +
   geom_abline(slope = 1, intercept = 0, linetype=1) + 
   geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
-  scale_x_continuous(expand = c(0, 0), limits = c(0, NA),breaks =seq(0,16000,2000)) + 
+  scale_x_continuous(expand = c(0, 0), limits = c(0, NA) ,breaks =seq(0,16000,2000)) + 
   scale_y_continuous(expand = c(0, 0), limits = c(0, NA),breaks =seq(0,16000,2000)) +
   xlab("Average female expression") +
   ylab("Average male expression")
  
-#ggsave("hemizygous_jpop_RsalOutgroup.pdf", height = 5, width =7)
+#ggsave("hemizygous_jpop_RsalOutgroup_ncOverlap.pdf", height = 5, width =7)
+
 ```
 
 ## expression of X-Y gametologs!
 - sig testing - beta binomial
 - 
+```{r x-y-expression}
+# get unnormalized but total exp filtered read counts into longer format (each sample is own row)
+# jpop_long<- jpop_reads_filter %>% select(-total) %>% 
+#   pivot_longer(cols = TM4:TM3,
+#               names_to = "sampleName",
+#               values_to = "readcount") %>%
+#  mutate(sex = ifelse(grepl("TM", sampleName), "M",
+#             ifelse(grepl("TF", sampleName), "F", NA))) 
+# combine with pgMatOrths to get into on gametologs. 
+# 
+# reads_pg_jpop_long <- left_join(pgMatOrths,jpop_long, by = c("id_tx_mat"="Geneid"),relationship = "many-to-many") %>%
+#   left_join(.,jpop_long, by = c("id_tx_pat" = "Geneid","sampleName","sex"),suffix = c(".x",".y"),relationship = "many-to-many") 
+# 
+# jpop_summary <- reads_pg_jpop_long %>% group_by(pairID,id_tx_mat,id_tx_pat,sex) %>% summarise(meanCount.x = mean(readcount.x), meanCount.y = mean(readcount.y),nCount.x = sum(readcount.x),nCount.y=sum(readcount.y),propn.x = (nCount.x/(nCount.x+nCount.y)),propn.y = (nCount.y/(nCount.x+nCount.y)) )
+# # # 
+# genesToRemove<-filter(jpop_summary, propn.x < 0.9 & meanCount.y > 20 & sex == "F") %>% select(pairID,id_tx_mat,id_tx_pat)
+
+jpop_reads_summary<- jpop_reads_filter %>% 
+  rowwise() %>%
+  mutate(femTotal = sum(c_across(contains("TF")))) %>%
+  mutate(maleTotal = sum(c_across(contains("TM")))) %>%
+  mutate(femMean = mean(c_across(contains("TF")))) %>%
+  mutate(maleMean = mean(c_across(contains("TM"))))
+
+
+# filter out bad genes
+jpop_reads_badgenes<-jpop_reads_summary %>% 
+   filter(femMean> 20 & Chr =="Y")
+jpop_reads_goodgenes<-jpop_reads_summary %>% 
+   filter(femMean <20 & Chr =="Y")
+
+
+
+
+# 
+jpop_x<- filter(jpop_reads_summary, Chr =="X") %>% select(c(Geneid,TM4:maleMean))
+jpop_y<- filter(jpop_reads_summary, Chr =="Y") %>% select(c(Geneid,TM4:maleMean)) 
+
+### 
+#negate %in%
+`%nin%` <- negate(`%in%`)
+
+reads_pg_jpop<-left_join(pgMatOrths,jpop_x, by = c("id_tx_mat"="Geneid")) %>%
+  left_join(.,jpop_y, by = c("id_tx_pat" = "Geneid"),suffix = c(".mat",".pat")) %>% 
+  filter(id_tx_mat%nin%jpop_reads_badgenes$Geneid) %>%
+  filter(id_tx_pat%nin%jpop_reads_badgenes$Geneid) %>%
+  drop_na()
+
+write_csv(reads_pg_jpop,"reads_pangenes_jpop_TXanno_nsorthsincl.csv")
+
+dim(reads_pg_jpop)
+```
+### plot x v y
 ```{r}
-gametologCounts<-as.data.frame(normalized_counts_auto) %>% 
-  rownames_to_column(var = "Geneid") %>% 
-  filter(!Geneid%in%genesToRemove$id_tx_mat) %>%
-  filter(!Geneid%in%genesToRemove$id_tx_pat) %>%
-  rowwise %>% 
-  mutate(maleMean = mean(c_across(contains("TM")))) %>%
-  mutate(femaleMean = mean(c_across(contains("TF"))))
+ggplot(reads_pg_jpop) + geom_point(aes(x=maleMean.mat,y=maleMean.pat)) +
+    geom_abline(slope = 1, intercept = 0, linetype=1) +
+  theme_bw()+
+  xlab("mean exp of X gametolog") +
+  ylab("mean exp of Y gametolog") 
+  
+ggsave("meanExp_XY_males.pdf")
 ```
 
 
