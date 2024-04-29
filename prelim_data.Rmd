@@ -17,9 +17,8 @@ library(data.table, quietly = TRUE)
 - pgMAT and PAT annotations contain the same homologs, so doesn't matter which file to use
 - suggestion from stephen: keep pairs where there's one NSORTH and no syn orths
 ```{r load-and-filter-pangenes}
-#pgMat_tx<-read_table("pangenes_tx/tx_mat_pangenes.txt.gz")
+# skipt to next chunk to load results
 pgMat_tx<-vroom("pangenes_tx/tx_mat_pangenes.txt.gz",show_col_types = FALSE)
-#pgPat_tx<-read_table("pangenes_tx/tx_pat_pangenes.txt.gz")
 
 pgMat_PASS<-filter(pgMat_tx,(flag == "PASS") & (genome == "tx_mat"|genome == "tx_pat")) %>%
    select(pgID,genome,id,chr,start, end, flag) %>% 
@@ -33,30 +32,7 @@ pgMat_PASS<-filter(pgMat_tx,(flag == "PASS") & (genome == "tx_mat"|genome == "tx
                  ~str_replace(.,"-RA$",""))) %>%
    unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct()
 
-
-#pgMatWide_PASS<- pgMat_PASS %>% distinct() %>% pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) #%>%
- #select(-pgID)
-
-#pgMatGenes_PASS<- pgMatWide_PASS %>% filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
-#  mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
-#                 ~str_replace(.,"-RA$",""))) %>%
-#  unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct() 
-
 pgIDs_PASS<- select(pgMat_PASS, pgID)
-
-
-# pgMat_NSOrths<-pgMat_tx %>% select(pgID,genome,id,chr,start, end, flag) %>% #filter(pgMat_tx,((flag == "PASS" & genome == "tx_mat") |(flag =="NSOrtho" & genome == "tx_pat")) %>%
-#    group_by(pgID,genome,flag) %>% 
-#    filter(n() == 1) %>% 
-#     filter(!pgID%in%pgIDs_PASS$pgID) %>%
-#    ungroup() %>% distinct() %>% 
-#    pivot_wider(names_from = genome, 
-#    values_from = c(id,chr,start,end,flag)) %>%
-#    filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat)) %>%
-#    filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
-#    mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
-#                 ~str_replace(.,"-RA$",""))) %>%
-#    unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct()
 
 pgMat_NSOrths<- pgMat_tx %>% 
   select(pgID,genome,id,chr,start, end, flag) %>% 
@@ -79,16 +55,14 @@ pgMat_NSOrths<- pgMat_tx %>%
 dim(pgMat_PASS) #2320 genes
 dim(pgMat_NSOrths) # 1644 NSorths
 
-#pgMatWide_NSO<- pgMat_NSOrths %>% distinct() %>%  
-#  pivot_wider(names_from = genome, 
-#  values_from = c(id,chr,start,end,flag)) %>%
-#  filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat))
-  #select(-pgID)
-# 2886 NSorths
-
 pgMatOrths<-bind_rows(pgMat_PASS,pgMat_NSOrths) %>% select(-pgID)
 
+#write_csv(pgMatOrths, "pgMatOrths.csv")
+```
 
+
+```{r reload-pangenes}
+pgMatOrths<-read_csv("pgMatOrths.csv")
 ```
 
 ## population data - josh pop
@@ -124,8 +98,7 @@ jpop_reads_filter<-  jpop_reads %>%
               ifelse(grepl("A3",Chr), "A3",
               ifelse(grepl("A4",Chr), "A4", NA))))))) %>%
   rowwise() %>% 
-  mutate(total = sum(TM4:TM3)) %>% 
-  filter(.,total >20) 
+  mutate(total = sum(TM4:TM3)) 
   
 jpop_info<-select(jpop_reads_filter, Geneid:Length)
 
@@ -136,8 +109,8 @@ coldata<- DataFrame(colnames(jpop_reads%>% select(TM4:TM3)))
 ####
 df<-DESeqDataSetFromMatrix(read_counts_all,coldata,design = ~ 1)
 dds <- DESeq(df)
-#dds<-estimateSizeFactors(dds)
-#allchrFactors<-sizeFactors(dds)
+dds<-estimateSizeFactors(dds)
+allchrFactors<-sizeFactors(dds)
 #norm_counts<-count()
 
 #normalized_counts_all<-counts(dds, normalized=TRUE)
@@ -163,13 +136,6 @@ Compare expression of hemizygous genes b/w males and females
 - prev gene loss calc method - like nc data
 - hemizyous list is from jpop_tx_exp_geneloss.Rmd
 ```{r load-hemizygous}
-length(setdiff(hemizygousGenes$id_tx_mat,tx_yloss$repGene))
-# 230 genes in the frst df and not in 2nd
-# prev. method probably doesn't deal with nsorths the same way?
-#e.g. TX_maternal_00017438
-length(setdiff(tx_yloss$repGene,hemizygousGenes$id_tx_mat))
-# 0
-
 # use hemizygous list filtered by nc overlap
 tx_yloss_nc_overlap<-read.csv("tx_yloss_overlapNCcomplete_loss.csv")
 
@@ -183,10 +149,15 @@ hemicounts <- as.data.frame(normalized_counts_auto) %>%
   rownames_to_column(var = "Geneid") %>% filter(Geneid%in%tx_yloss_nc_overlap$repGene) %>%
   rowwise %>% 
   mutate(maleMean = mean(c_across(contains("TM")))) %>%
-  mutate(femaleMean = mean(c_across(contains("TF"))))
-#library(ggplot2)
+  mutate(femaleMean = mean(c_across(contains("TF")))) %>%
+  mutate(totalCount =sum(c_across(contains("T")))) %>%
+  ungroup() %>%
+  filter(totalCount >20)
+  
+  #library(ggplot2)
 ggplot(hemicounts, aes(x = femaleMean, y = maleMean)) + 
   geom_point() +
+  geom_smooth(method="lm") +
   geom_abline(slope = 1, intercept = 0, linetype=1) + 
   geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
   scale_x_continuous(expand = c(0, 0), limits = c(0, NA) ,breaks =seq(0,16000,2000)) + 
@@ -226,6 +197,7 @@ jpop_reads_summary<- jpop_reads_filter %>%
   mutate(maleMean = mean(c_across(contains("TM"))))
 
 
+
 # filter out bad genes
 jpop_reads_badgenes<-jpop_reads_summary %>% 
    filter(femMean> 20 & Chr =="Y")
@@ -247,7 +219,13 @@ reads_pg_jpop<-left_join(pgMatOrths,jpop_x, by = c("id_tx_mat"="Geneid")) %>%
   left_join(.,jpop_y, by = c("id_tx_pat" = "Geneid"),suffix = c(".mat",".pat")) %>% 
   filter(id_tx_mat%nin%jpop_reads_badgenes$Geneid) %>%
   filter(id_tx_pat%nin%jpop_reads_badgenes$Geneid) %>%
-  drop_na()
+  drop_na() %>% select(-flag_tx_pat,-flag_tx_mat) %>% 
+  unique() %>%
+  rowwise() %>% 
+  mutate(totalCountAll=sum(c_across(starts_with("T",ignore.case =FALSE)))) %>%
+  ungroup() %>%
+  filter(totalCountAll >20)
+##702!  
 
 write_csv(reads_pg_jpop,"reads_pangenes_jpop_TXanno_nsorthsincl.csv")
 
@@ -255,14 +233,293 @@ dim(reads_pg_jpop)
 ```
 ### plot x v y
 ```{r}
-ggplot(reads_pg_jpop) + geom_point(aes(x=maleMean.mat,y=maleMean.pat)) +
+ggplot(reads_pg_jpop,aes(x=maleMean.mat,y=maleMean.pat)) + geom_point() +
     geom_abline(slope = 1, intercept = 0, linetype=1) +
   theme_bw()+
+  geom_smooth() +
   xlab("mean exp of X gametolog") +
   ylab("mean exp of Y gametolog") 
   
-ggsave("meanExp_XY_males.pdf")
+#ggsave("meanExp_XY_males.pdf")
+```
+interesting - there are a few genes that have high X exp relative to Y exp. 
+
+## significance testing
+- using deseq
+- create matrix, use sample + xory copy design
+
+```{r deseq-ase}
+reads_pg_jpop<-read_csv("reads_pangenes_jpop_TXanno_nsorthsincl.csv")
+
+ase_data<-reads_pg_jpop %>% select(pairID,
+                                    TM1.mat,TM1.pat,
+                                    TM2.mat,TM2.pat,
+                                    TM3.mat,TM3.pat,
+                                    TM4.mat,TM4.pat,
+                                    TM5.mat,TM5.pat,
+                                    TM6.mat,TM6.pat) %>% column_to_rownames(var ="pairID")
+IDs<-colnames(ase_data)
+## sample names, remove suffix
+sample<-str_remove(IDs,"..at") # tm1 tm1 etc.
+allele<-str_remove(IDs,"TM..") # mat pat mat pat
+
+colInfo<-data.frame(IDs,sample,allele) # wooo
+
+ase_matrix<-as.matrix(ase_data)
+ase_matrix
+#design<- ~0+sample+allele
+design<- ~sample+allele
+
+m <- 6 # number of samples
+dds <- DESeqDataSetFromMatrix(ase_data, colInfo, design)
+sizeFactors(dds) <- rep(1, 2*m)
+dds <- DESeq(dds, fitType="local")
+
+resultsNames(dds)
+
+res.allele <- results(dds, name="allele_pat_vs_mat")
+head(res.allele$log2FoldChange)
+# totall hte same lol!
+
+#res.sample<-results(dds, neme)
+
+y.vs.x <- 2^res.allele$log2FoldChange
+plot(y.vs.x)
+ylim(0,1)
+
+ggplot()+geom_histogram(aes(y.vs.x)) + xlim(0,1)
+
+plot(y.vs.x, 
+     col=ifelse(res.allele$padj < .1, "red", "black"))
+
+y.vs.total <- y.vs.x / (1 + y.vs.x)
+                        
+                        
+plot(y.vs.total,
+     col=ifelse(res.allele$padj < .1, "red", "black"))
+```
+"For a given comparison, a positive fold change value indicates an increase of expression, while a negative fold change indicates a decrease in expression.
+This value is typically reported in logarithmic scale (base 2). For example, log2 fold change of 1.5 for a specific gene in the “WT vs KO comparison” means that the expression of that gene is increased in WT relative to KO by a multiplicative factor of 2^1.5 ≈ 2.82"
+
+```{r deseq-ase-plots}
+#abline(h = 0.5, col="black", lwd=1, lty=2)
+
+## ok. What now???
+
+## p-vals?
+
+adj_pvals<-res.allele$padj
+adj_pvals 
+
+# pvals_genes<-data.frame(res.allele@rownames,res.allele$padj,res.allele$log2FoldChange) %>%
+#   mutate(.,ratio = 2^res.allele.log2FoldChange) %>% 
+#   left_join(reads_pg_jpop,by =c("res.allele.rownames"="pairID"))
+
+pvals_filtered<- pvals_genes %>% 
+   filter(adj_pvals <0.01) %>% filter(.,abs(res.allele.log2FoldChange)>2) #70 vs 138
+
+# what is my p value cutoff?
+colnames(pvals_genes)
+# ddefault alpha is 0.1
+# default padj method is. BH
+summary(res.allele)
+#summary(res.allele, alpha = 0.001)
+# most negative male fold change is male silenced
+## log chnage cutoff
+
+ggplot(pvals_genes) +geom_histogram(aes(res.allele.log2FoldChange))
+
+
+
+# ggplot(pvals_genes) + 
+#   geom_point(aes(x=ratio,y=(maleTotal.mat/femTotal.mat))) +
+#   ylim(0,1)+
+#   xlim(0,1)
+
+#ggplot(pvals_genes) +geom_point(aes(x=start_tx_pat,y=res.allele.log2FoldChange)) 
+#ggplot(pvals_filtered) +geom_point(aes(x=start_tx_pat,y=res.allele.log2FoldChange)) 
+
+
+
+## join pvals to read files
+
+
+pvals_genes<-data.frame(res.allele@rownames,res.allele$padj,res.allele$log2FoldChange) #%>%
+#   mutate(.,ratio = 2^res.allele.log2FoldChange) %>% 
+#   left_join(reads_pg_jpop,by =c("res.allele.rownames"="pairID"))
+reads_pg_jpop_pvals<-inner_join(reads_pg_jpop, pvals_genes, by =c("pairID" ="res.allele.rownames")) %>%
+  mutate(sigTest = 
+           case_when((res.allele.padj < 0.01 & abs(res.allele.log2FoldChange)>2) ~ "sig",
+                     TRUE ~"nonsig" ))
+ggplot(reads_pg_jpop_pvals) +
+  geom_point(aes(x=start_tx_pat, 
+                 y = 2^res.allele.log2FoldChange/(1+2^res.allele.log2FoldChange),
+                 color = sigTest))
+ggplot(reads_pg_jpop_pvals) +
+  geom_point(aes(y=(maleTotal.pat+maleTotal.mat)/(femTotal.mat+femTotal.pat), 
+                 x = maleTotal.pat/(maleTotal.mat+maleTotal.pat),
+                 color = sigTest)) +ylim(0,1)
+```
+
+```{r}
+## make it wider
+
+reads_pg_jpop_pvals_norm<-reads_pg_jpop_pvals %>% 
+  pivot_longer(c(TM4.mat:TM3.mat,TM4.pat:TM3.pat),names_to = "sample",values_to = "count") %>%
+  mutate(NormCounts = 
+           case_when(
+             grepl("TM1", sample) ~ count / autochrFactors["TM1"],
+             grepl("TM2", sample) ~ count / autochrFactors["TM2"],
+             grepl("TM3", sample) ~ count / autochrFactors["TM3"],
+             grepl("TM4", sample) ~ count / autochrFactors["TM4"],
+             grepl("TM5", sample) ~ count / autochrFactors["TM5"],
+             grepl("TM6", sample) ~ count / autochrFactors["TM6"],
+             grepl("TF1", sample) ~ count / autochrFactors["TF1"],
+             grepl("TF2", sample) ~ count / autochrFactors["TF2"],
+             grepl("TF3", sample) ~ count / autochrFactors["TF3"],
+             grepl("TF4", sample) ~ count / autochrFactors["TF4"],
+             grepl("TF5", sample) ~ count / autochrFactors["TF5"],
+             grepl("TF6", sample) ~ count / autochrFactors["TF6"],
+             TRUE ~ NA_real_
+           )
+  ) #%>% pivot_wider(names_from = sample, values_from = c(count,NormCounts)) # to undo!
+                                                      
+norm_summ<-reads_pg_jpop_pvals_norm %>% 
+  mutate(sex = case_when(grepl("M",sample) ~ "M", 
+                         grepl("F",sample) ~ "F")) %>%
+  mutate(allele = case_when(grepl(".pat",sample) ~ "pat", 
+                         grepl(".mat",sample) ~ "mat")) %>%
+  group_by(pairID,sex,allele) %>% 
+  summarise(totalNormCounts = sum(NormCounts),meanNormCounts=mean(NormCounts)) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from=c("sex","allele"), values_from=c("totalNormCounts","meanNormCounts"))
+
+pvals_norm_wide <- reads_pg_jpop_pvals_norm %>%  pivot_wider(names_from = sample, values_from = c(count,NormCounts))
+
+reads_pg_jpop_pvals_norm<-full_join(reads_pg_jpop_pvals,norm_summ, by = "pairID")                                          
 ```
 
 
+```{r deseq-ase-plots-more}
+# 
+# ggplot(reads_pg_jpop_pvals)+
+#   geom_point(aes(x=maleTotal.pat/(maleTotal.mat+maleTotal.pat),y=femTotal.mat/maleTotal.mat))
+
+ggplot(filter(reads_pg_jpop_pvals, 
+              sigTest == "sig", res.allele.log2FoldChange < 0),
+       aes(x=femMean.mat, y=maleMean.mat)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_smooth(method ="lm") +
+   #scale_x_continuous(expand = c(0, 0), limits = c(0, NA) ,breaks =seq(0,16000,2000)) + 
+  #scale_y_continuous(expand = c(0, 0), limits = c(0, NA),breaks =seq(0,16000,2000)) +
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic()
+
+ggplot(hemicounts, aes(x = femaleMean, y = maleMean)) + 
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+  geom_smooth(method ="lm") +
+  scale_x_continuous(expand = c(0, 0), limits = c(0, 5000) ,breaks =seq(0,5000,500)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 5000),breaks =seq(0,5000,500)) +
+  xlab("Average female expression") +
+  ylab("Average male expression")
+
+#ggsave("hemizygous_jpop_RsalOutgroup_ncOverlap.pdf", height = 5, width =7)
+
+
+```
+
+```{r}
+
+ggplot(filter(reads_pg_jpop_pvals_norm, sigTest == "sig",res.allele.log2FoldChange < 0),aes(x=meanNormCounts_F_mat, y=meanNormCounts_M_mat)) +
+  geom_point()+
+  #geom_point(aes(color=sigTest)) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_smooth(method ="lm") +
+  scale_x_continuous(expand = c(0, 0), limits = c(0, 5000) ,breaks =seq(0,5000,500)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 5000),breaks =seq(0,5000,500)) +
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+  xlab("Average female expression") +
+  ylab("Average male expression")
+#ggsave("norm_femvmaleCounts.pdf", h = 5, w =7)
+
+dummy1<-c(0,)
+
+## blank plot for talk
+ggplot() +
+  geom_blank() +
+  geom_point()+
+  #geom_point(aes(color=sigTest)) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_smooth(method ="lm") +
+  scale_x_continuous(expand = c(0, 0), limits = c(0, 5000) ,breaks =seq(0,5000,500)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 5000),breaks =seq(0,5000,500)) +
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+  xlab("Average female expression") +
+  ylab("Average male expression")
+ggsave("blankplot.pdf",h=5,w=7)
+```
+
+```{r}
+ggplot(reads_pg_jpop_pvals_norm,aes( 
+      y=((totalNormCounts_M_pat+totalNormCounts_M_mat)/(totalNormCounts_F_pat+totalNormCounts_F_mat)),
+      x=((2^res.allele.log2FoldChange))))+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, 1)) +
+  scale_x_continuous(expand = c(0, 0), limits = c(0, 1)) +
+  geom_point(aes(color=sigTest)) 
+  #(x=(totalNormCounts_M_pat/(totalNormCounts_M_mat+totalNormCounts_M_pat)),
+```
+
+```{r}
+# bin by degree of silencing 
+
+ggplot(filter(reads_pg_jpop_pvals_norm, meanNormCounts_M_pat/meanNormCounts_M_mat<0.2 & meanNormCounts_M_pat/meanNormCounts_M_mat>0),aes(x=meanNormCounts_F_mat, y=meanNormCounts_M_mat)) +
+  geom_point()+
+  #geom_point(aes(color=sigTest)) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_smooth(method ="lm") +
+   scale_x_continuous(expand = c(0, 0), limits = c(0, NA) ,breaks =seq(0,16000,2000)) + 
+  scale_y_continuous(expand = c(0, 0), limits = c(0, NA),breaks =seq(0,16000,2000)) +
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic()
+```
+
+```{r }
+#dist of fold chang an dsignifcant genes ot report results
+# fraction 
+# x/y+x
+# or get ratos and label by signifcants
+# fold chagne is fine? 
+# fdr cutoff has large impact 
+# can afford ot be stringent?
+
+# Ks values
+#### x/y vs Ks
+
+#no DC in degenerated genes
+
+# timescale of exp loss?
+
+
+
+```
+
 ## marais y/x male/female expression plots
+
+```{r}
+
+## try afgain with norm facotrs
+
+# sig dept of that slope from 0.5 lines
+
+#filter(reads_pg_jpop_pvals, res.allele.log2FoldChange > 0),aes(x=femMean.mat, y=maleMean.mat)
+#summary(lm(femMean.mat~maleMean.mat,data =filter(reads_pg_jpop_pvals, res.allele.log2FoldChange > 0)))
+#summary(lm(femMean.mat~maleMean.mat,data =filter(reads_pg_jpop_pvals, res.allele.log2FoldChange < 0)))
+
+```
+
+
+```{r}
+
+```
+
