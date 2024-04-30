@@ -3,6 +3,7 @@ STARindex/
 fastqs/
 genome/
 RNAbams/
+logs/
 .snakemake/
 .Rproj.user
 *.Rproj
