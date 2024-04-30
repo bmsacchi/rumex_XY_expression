@@ -59,7 +59,7 @@ overlapp_all_loss<-tx_mat_loss %>% filter(nc_hap1%in%allncGenesToKeep$repGene)
 ```{r}
 write_csv(overlap_yloss, "tx_yloss_overlapNCcomplete_loss.csv")
 #write_csv(overlap_all, "tx_")
-```
+``` 
 To do
 - blast confirm
 - do expression stuff
