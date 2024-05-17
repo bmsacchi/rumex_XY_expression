@@ -2,6 +2,520 @@
 title: "expression analyses with eQTL data"
 output: html_notebook
 ---
+Goal: 
+use previously generated table of gametologs, repeat male v. female expression analyses and mat and pat allele expression analyses (ase) using the large eQTL population dataset
+
+#### Packages
+```{r packages, echo=TRUE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ggfortify)
+library(ggplot2)
+library(ggrepel)
+library(DESeq2)
+```
+
+#### Raw read count data
+```{r load-readcounts, echo=TRUE, message=FALSE, warning=FALSE}
+rnaCounts<-read_table("readCountsRNAeQTL/rhastTXeQTLrna.txt")
+dnaCounts<-read_table("readCountsDNAeQTL/rhastTXeQTLdna.txt")
+```
+
+#### data wrangling
+- fix sample names
+- order by sex
+- compile sample information for deseq2
+- remove sample 40aFLD and 24fMLD - first one is abberant, second has weirdly small fastq
 
 ```{r}
+rnaColnames<-colnames(rnaCounts)
+rnaColnamesRepaired <- gsub(".*NEBNext_dual_i._.+\\.([0-9]+[a-z]+[FM])LRAligned.+", "\\1", rnaColnames)
+colnames(rnaCounts)<-rnaColnamesRepaired 
+
+
+dnaColnames<-colnames(dnaCounts) 
+dnaColnamesRepaired<- gsub("NS\\.[0-9]+\\.[0-9]+.IDT_i._\\d+---IDT_i._\\d+\\.(\\d+[a-z]+[FM])LD_sortMarkDups.*", "\\1", dnaColnames)
+colnames(dnaCounts)<-dnaColnamesRepaired
+
+setdiff(rnaColnamesRepaired,dnaColnamesRepaired)
+# remove samples "67eF" "14bF" "45aF"
+# also need to remove 40aF and 24fM 
+# 40aF< and 35aM have aberrant coverage patterns
+
+rnaCountsClean <- rnaCounts %>% 
+  select(-"67eF",-"14bF",-"45aF",-"40aF",-"24fM",-"35aM") %>% # remove samples not in DNA and weird ones
+  relocate(1:6,ends_with("F"), ends_with("M")) %>% # sort columns for ease
+  mutate(Chr = ifelse(grepl("X",Chr), "X", # relabel Chrs for convenience
+              ifelse(grepl("Y",Chr), "Y",
+              ifelse(grepl("A1",Chr), "A1",
+              ifelse(grepl("A2",Chr), "A2",
+              ifelse(grepl("A3",Chr), "A3",
+              ifelse(grepl("A4",Chr), "A4", NA))))))) %>%
+  rowwise() %>% 
+  mutate(totalCountsGene = sum(c_across(7:155))) %>% 
+  mutate(meanCounts = totalCountsGene/149) %>%
+  mutate(femaleCountsTotal = sum(c_across(contains("F", ignore.case = FALSE)))) %>%
+  mutate(female_mean = femaleCountsTotal/74) %>%
+  mutate(maleCountsTotal = sum(c_across(contains("M", ignore.case = FALSE)))) %>%
+  mutate(male_mean = maleCountsTotal/75) %>% 
+  relocate(1:6,totalCountsGene, meanCounts, femaleCountsTotal, female_mean, maleCountsTotal,male_mean ) # get total gene-level counts for filtering
+
+dnaCountsClean <- dnaCounts %>% 
+  select(-"40aF",-"24fM",-"35aM") %>%
+  relocate(1:6,ends_with("F"), ends_with("M")) %>%
+  mutate(Chr = ifelse(grepl("X",Chr), "X",
+              ifelse(grepl("Y",Chr), "Y",
+              ifelse(grepl("A1",Chr), "A1",
+              ifelse(grepl("A2",Chr), "A2",
+              ifelse(grepl("A3",Chr), "A3",
+              ifelse(grepl("A4",Chr), "A4", NA))))))) %>% 
+  rowwise() %>% 
+  mutate(totalCountsGene = sum(c_across(7:155))) %>% 
+  mutate(meanCounts = totalCountsGene/149) %>%
+  mutate(femaleCountsTotal = sum(c_across(contains("F", ignore.case = FALSE)))) %>%
+  mutate(female_mean = femaleCountsTotal/74) %>%
+  mutate(maleCountsTotal = sum(c_across(contains("M", ignore.case = FALSE)))) %>%
+  mutate(male_mean = maleCountsTotal/75) %>% 
+  relocate(1:6,totalCountsGene, meanCounts, femaleCountsTotal, female_mean, maleCountsTotal,male_mean )
+
+
+###
+#make it a function
 ```
+
+
+```{r}
+# 156 samples
+setdiff(colnames(rnaCountsClean),colnames(dnaCountsClean))
+# ok all g
+#rnaCountsWide<-rnaCountsClean %>% pivot_longer(names_to = )
+
+dnaSamplenamesClean<-colnames(select(dnaCountsClean,-1:-7))
+sampleInfo<-as_tibble_col(dnaSamplenamesClean, column_name="Sample") %>% mutate(.,Sex = if_else(grepl("*M", Sample),"M", "F"))
+filter(sampleInfo, grepl("M", Sample)) # 75 males
+filter(sampleInfo, grepl("F", Sample)) # 74 females
+
+```
+
+
+PCA of coverage DNA males and females
+* note: the cleaning step has been tweaked
+* samples 24fM should always be removed
+* for main expression analyses, we are leaving out 40aF and 35aM - looks like opposite sex - mislabeling or abberrant
+```{r} 
+#library(factoextra) 
+
+# dnamat<-dnaCountsClean %>% select(-Chr:-Length) %>% column_to_rownames(var = "Geneid") %>% 
+#   select(-"24fM") 
+#  #select(-"40aF",-"24fM",-"35aM") %>%
+# dnamat_flip<- t(dnamat)
+# ## pca error - there are some genes with zero variance which need to be filtered out!
+# ## probbly zero reads or smoethig..
+# which(apply(dnamat_flip, 2, var)==0)
+# dnamat_flip<-dnamat_flip[ , which(apply(dnamat_flip, 2, var) != 0)]
+# 
+# # dnamat_flip_sex<-as.data.frame(dnamat_flip) %>% 
+# #   rownames_to_column("Sample")  %>% 
+# #   mutate(Sex = if_else(grepl("*M", Sample),"M", "F"))  %>% relocate(Sample,Sex)
+# 
+# 
+# res.pca <- prcomp(dnamat_flip, scale = TRUE)
+# 
+# 
+# autoplot(res.pca, data = filter(sampleInfo, Sample !="24fM"), colour="Sex")
+# 
+# ggsave("PCA_DNAcounts.pdf")
+
+#autoplot(res.pca, data = dnamat_flip_sex, colour="Sex") + geom_label_repel(aes(label = Sample,color = Sex), max.overlaps = 30)
+
+## abberant male is 35aM
+#View(select(dnaCountsClean,Chr,"35aM","43aF","28dM","50bM"))
+## need to be filtered out
+
+```
+
+```{r}
+# ### pca if I remove the sex chromosomes???
+# dnamat_nosex<-dnaCountsClean %>% select(-"24fM") %>%
+#   filter(Chr != "X" & Chr != "Y") %>%select(-Chr:-Length) %>% column_to_rownames(var = "Geneid")
+# 
+# dnamat_flip_nosex<- t(dnamat_nosex)
+# ## pca error - there are some genes with zero variance which need to be filtered out!
+# ## probbly zero reads or smoethig..
+# 
+# which(apply(dnamat_flip_nosex, 2, var)==0)
+# dnamat_flip_nosex<-dnamat_flip_nosex[ , which(apply(dnamat_flip_nosex, 2, var) != 0)]
+# res.pca.nosex <- prcomp(dnamat_flip_nosex, scale = TRUE)
+# 
+# autoplot(res.pca.nosex, data = (filter(sampleInfo, Sample !="24fM")), colour="Sex") + ggrepel::geom_label_repel(aes(label = Sample))
+# 
+# ggsave("pca_dna_nosexchr.pdf")
+# 
+# 
+# # norm coverage
+# normFac<-as.data.frame(dnamat_flip_nosex) %>% 
+#   rownames_to_column("Sample") %>% 
+#   rowwise() %>%
+#   mutate(TotalReads = sum(c_across(where(is.numeric)))) %>% 
+#   relocate(TotalReads) 
+# 
+# normalizeDnaCounts<- normFac %>% mutate(across(where(is.numeric), ~ ./TotalReads)) %>% select(-TotalReads)
+# 
+# res.pca.nosex.norm<- prcomp((normalizeDnaCounts %>% column_to_rownames("Sample")), scale = TRUE) 
+# 
+# autoplot(res.pca.nosex.norm, data = (filter(sampleInfo, Sample !="24fM")), colour="Sex") + 
+#   ggrepel::geom_label_repel(aes(label = Sample))
+# 
+# ggsave("pca_dna_nosexchr_norm.pdf")
+# ## THHIS IS A RABBIT HOLE
+# #MOVE ON!!!
+```
+
+#### Expression analyses
+```{r}
+`%nin%` <- negate(`%in%`)
+
+## par filter? do later
+
+badgenes<-rnaCountsClean %>% 
+  filter(female_mean>= 20 & Chr =="Y") %>% select(Geneid) # get genes where females have too much Y coverage
+# some may be on Y PAR - which is fromm 0-45MB. Disregard and remove all for now!
+badgenes_x <- pgMatOrths %>% select(id_tx_mat,id_tx_pat) %>% filter(id_tx_pat%in%badgenes$Geneid) %>% select(id_tx_mat)
+## find corresponding X gene for every "bad" Y gene
+
+
+rnaCountsFilt<-rnaCountsClean %>% 
+  filter(Geneid%nin%badgenes$Geneid & Geneid%nin%badgenes_x$id_tx_mat)
+  #& Geneid%nin%badgenes$Geneid & Geneid%nin%badgenes_x$id_tx_mat) # filter out genes with too few total counts, and weird female Y mapping
+
+
+readsMatAll<-rnaCountsFilt %>% column_to_rownames("Geneid") %>% select("39dF":160) # convert to matrix of all genes and inds
+
+readsMatAuto<-rnaCountsFilt %>% filter(grepl("A",Chr)) %>% # matrix with just autosomes, for generating norm factors
+  column_to_rownames("Geneid") %>% select("39dF":160) 
+
+sampleNames<- colnames(readsMatAll)
+#
+sampleInfo<-data.frame(sampleNames) %>% 
+  mutate(.,Sex = if_else(grepl("*M", sampleNames),"M", "F"))
+
+df_all<-DESeqDataSetFromMatrix(readsMatAll,sampleInfo,design = ~ 1)
+df_auto<-DESeqDataSetFromMatrix(readsMatAuto,sampleInfo,design = ~ 1)
+dds_all <- DESeq(df_all)
+dds_auto <- DESeq(df_auto)
+allchrFactors<-sizeFactors(dds_all)
+autoFactors<-sizeFactors(dds_auto)
+compareFactors<-data.frame(allchrFactors,autoFactors) %>% rownames_to_column("sample") 
+compareFactorsLong <- compareFactors %>% pivot_longer(cols = -sample, names_to = "normType", values_to = "value")
+ggplot(compareFactorsLong) + geom_point(aes(x = sample, y = value, color = normType)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+ggsave("compare_norm_factors.pdf", h = 5, w = 18)
+## dont bother!
+## sample 43bM needs the most correction for some reason!
+# is there any point to correcting based on auto counts?
+
+```
+
+## ASE
+```{r}
+pgMatOrths<-read_csv("data/pgMatOrths.csv")
+
+```
+
+```{r}
+eqtl_x<- filter(rnaCountsFilt, Chr =="X") %>% select(c(Geneid,totalCountsGene:"43bM")) ## extract X gene counts
+eqtl_y<- filter(rnaCountsFilt, Chr =="Y") %>% select(c(Geneid,totalCountsGene:"43bM")) ## extract Y gene counts
+
+reads_pg<-left_join(pgMatOrths,eqtl_x, by = c("id_tx_mat"="Geneid")) %>%
+  left_join(.,eqtl_y, by = c("id_tx_pat" = "Geneid"),suffix = c(".mat",".pat")) %>% 
+  #filter(id_tx_mat%nin%badgenes$Geneid) %>%
+  #filter(id_tx_pat%nin%badgenes$Geneid) %>%
+  drop_na() %>% select(-flag_tx_pat,-flag_tx_mat) %>% 
+  unique() %>%
+  rowwise() %>% 
+  mutate(totalCountAll=(totalCountsGene.mat+totalCountsGene.pat)) %>%
+  ungroup() %>% filter(totalCountAll >20)
+
+ggplot(reads_pg,aes(x=male_mean.mat,y=male_mean.pat)) + geom_point() +
+    geom_abline(slope = 1, intercept = 0, linetype=1) +
+  theme_bw()+
+  geom_smooth(method ="lm") +
+  xlab("mean exp of X gametolog") +
+  ylab("mean exp of Y gametolog") 
+ggsave("gametolog_readCounts_all.jpg", h = 5, w = 7)
+```
+deseq ase test
+```{r}
+ase_data<-reads_pg %>% select(c(pairID,contains("M", ignore.case = FALSE ))) %>% column_to_rownames(var ="pairID")
+## ase matrix
+IDs<-colnames(ase_data)
+library(gtools)
+sorted_col_names <- mixedsort(IDs)
+ase_data <- ase_data[, sorted_col_names]
+#colnames(ase_data)
+# yay!!
+sample<-str_remove(sorted_col_names,"..at") # tm1 tm1 etc.
+allele<-str_extract(sorted_col_names,".at$") # mat pat mat pat
+
+colInfo<-data.frame(sorted_col_names,sample,allele) # wooo
+
+ase_matrix<-as.matrix(ase_data)
+design<- ~sample+allele
+
+m <- 75
+
+dds <- DESeqDataSetFromMatrix(ase_data, colInfo, design)
+sizeFactors(dds) <- rep(1, 2*m)
+dds <- DESeq(dds, fitType="local")
+
+resultsNames(dds)
+
+res.allele <- results(dds, name="allele_pat_vs_mat")
+head(res.allele$log2FoldChange)
+
+adj_pvals<-res.allele$padj
+
+
+pvals_genes<-data.frame(res.allele@rownames,res.allele$padj,res.allele$log2FoldChange,res.allele$lfcSE) #%>%
+reads_pg_pvals<-inner_join(reads_pg, pvals_genes, by =c("pairID" ="res.allele.rownames"))%>%
+  mutate(sigTest = 
+           case_when((res.allele.padj < 0.1) ~ "sig",
+                     TRUE ~"nonsig" )) %>% 
+  relocate(c(pairID:male_mean.mat, meanCounts.pat:male_mean.pat, res.allele.padj:sigTest))
+  #mutate(sigTest = case_when((res.allele.padj < 0.01) ~ "sig", TRUE ~ "nonsig"))
+
+write_csv(reads_pg_pvals, "rna_ase_results_eqtl.csv")
+head(reads_pg_pvals)
+```
+
+
+```{r}
+ggplot(reads_pg_pvals) +
+  geom_point(aes(x=start_tx_pat, 
+                 y = 2^res.allele.log2FoldChange/(1+2^res.allele.log2FoldChange), size = res.allele.lfcSE,
+                 color = sigTest),alpha = 0.5)
+ggsave("lfc_ase_log2_1.pdf")
+ggplot(reads_pg_pvals) +
+  geom_point(aes(y=(maleCountsTotal.pat+maleCountsTotal.mat)/(femaleCountsTotal.mat+femaleCountsTotal.pat), 
+                 x = maleCountsTotal.pat/(maleCountsTotal.mat),
+                 color = sigTest)) +ylim(0,1) + xlim(0,1) +geom_abline(intercept = 0.5, slope = 0.5)
+ggsave("DC_expected_counts_Lfc1_axis.pdf")
+
+# fraction of genes ow or ue on Y depending on stringency
+# more stringent lgo2fc2 change, more reduced Y exp, but fewer sig sites
+```
+### read ratio, not using fold change ratio
+
+```{r}
+df<- reads_pg_pvals %>% mutate(readratio = (male_mean.pat/male_mean.mat))
+
+ggplot(df)+ geom_histogram(aes(x = (readratio), color = sigTest)) #+xlim(0,1)
+
+
+ggplot(df,aes(x=male_mean.mat,y=male_mean.pat, color = sigTest)) + geom_point() +
+    geom_abline(slope = 1, intercept = 0, linetype=1) +
+  theme_bw()+
+  geom_smooth(method ="lm") +
+  xlab("mean exp of X gametolog") +
+  ylab("mean exp of Y gametolog") 
+
+## fdr cutoff 0.1
+## vary the fold change cutoffs
+# make a table opf how many Y over expressed and Y overexpressed genes (sig) 
+## from log2 0.5 to log2(2)
+
+## number of genes will be informative moving forwards
+
+
+## repeat this analysis with the DNA
+## mapping bias and annotation bias
+
+# DC in these genes
+# GO enrichment
+
+df2<- reads_pg_pvals %>% filter(sigTest == "sig" & pairID%nin%badgenes_dna$pairID)
+#df3<- reads_pg_pvals %>% filter(sigTest == "sig")
+
+```
+
+```{r}
+ggplot(filter(reads_pg_pvals, 
+              sigTest == "sig", res.allele.log2FoldChange < 0),
+       aes(x=female_mean.mat, y=male_mean.mat)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_smooth(method ="lm") +
+   #scale_x_continuous(expand = c(0, 0), limits = c(0, NA) ,breaks =seq(0,16000,2000)) + 
+  #scale_y_continuous(expand = c(0, 0), limits = c(0, NA),breaks =seq(0,16000,2000)) +
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic()
+### barely any sig ase??
+
+ggplot(filter(reads_pg_pvals, res.allele.log2FoldChange < 0),
+       aes(x=female_mean.mat, y=male_mean.mat)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_smooth(method ="lm") +
+   #scale_x_continuous(expand = c(0, 0), limits = c(0, NA) ,breaks =seq(0,16000,2000)) + 
+  #scale_y_continuous(expand = c(0, 0), limits = c(0, NA),breaks =seq(0,16000,2000)) +
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic()
+
+
+```
+nearly done!
+- add DNA
+- sig testing?
+- outgroup
+- Ks vs y/x
+- blast tx missing genes to tx genome????
+  - NC shared set is likely conservative and good to go!
+  - haven't id'd partial loss..
+- non-one-one orthologs - explore 
+- characterise these other genes
+- GO GO enrichment
+
+Need table
+- how many Y oe vs. X oe genes for each fold change from 0.5 -> 1 -> 2 ... 
+- at alpha of FDR 0.1
+```{r}
+get_obs_table <- 
+  function(data, cutoff) {
+  data %>%
+    filter(res.allele.padj < 0.1, abs(res.allele.log2FoldChange) > cutoff) %>%
+    summarise(n_Y_oe = sum(res.allele.log2FoldChange > 0),
+              n_X_oe = sum(res.allele.log2FoldChange <= 0)) %>%
+    mutate(foldChangeCutoff = cutoff)
+  }
+
+
+fold_change_cutoffs <- c(0.5, 1, 1.5, 2)
+obs_tables <- lapply(fold_change_cutoffs, function(cutoff) {
+  get_obs_table(reads_pg_pvals, cutoff)
+})
+combined_table <- do.call(rbind, obs_tables)
+print(combined_table)
+write_csv(combined_table, "n_xy_oe_RNA_eQTL_lfcRanges.csv")
+
+```
+### explore DNA output
+```{r}
+ggplot(dnaCountsClean, aes(meanCounts))+geom_histogram() + facet_wrap(~ Chr)
+ggplot(dnaCountsClean, aes(female_mean))+geom_histogram() + facet_wrap(~ Chr)
+ggsave("femaleMeanCounts_nolim_hist.pdf")
+ggplot(dnaCountsClean, aes(female_mean))+geom_histogram() + xlim(0,200)+ facet_wrap(~ Chr)
+ggsave("femaleMeanCounts_lim200_hist.pdf")
+ggplot(dnaCountsClean, aes(male_mean))+geom_histogram() + xlim(0,200)+ facet_wrap(~ Chr)
+ggsave("maleMeanCounts_lim200_hist.pdf")
+ggplot(dnaCountsClean, aes(male_mean))+geom_histogram() + facet_wrap(~ Chr)
+ggsave("maleMeanCounts_nolim_hist.pdf")
+```
+
+### DNA read ratios
+```{r}
+`%nin%` <- negate(`%in%`)
+
+## par filter? do later
+dim(filter(dnaCountsClean, Chr == "Y"))
+#6189
+badgenes_dna<-dnaCountsClean %>% 
+  filter(female_mean>= 20 & Chr =="Y") %>% select(Geneid) # get genes where females have too much Y coverage
+# some may be on Y PAR - which is fromm 0-45MB. Disregard and remove all for now!
+badgenes_x_dna <- pgMatOrths %>% select(id_tx_mat,id_tx_pat) %>% filter(id_tx_pat%in%badgenes_dna$Geneid) %>% select(id_tx_mat)
+## find corresponding X gene for every "bad" Y gene
+
+
+dnaCountsFilt<-dnaCountsClean %>% 
+  filter(Geneid%nin%badgenes_dna$Geneid & Geneid%nin%badgenes_x_dna$id_tx_mat)
+  #& Geneid%nin%badgenes$Geneid & Geneid%nin%badgenes_x$id_tx_mat) # filter out genes with too few total counts, and weird female Y mapping
+dim(filter(dnaCountsFilt, Chr == "Y"))
+# 2180 genes remain
+```
+
+
+```{r}
+### filter genes with sig DNA male coverage bw x and y fgemtolog instead of just chucking out "badgenes"
+eqtl_x_dna<- filter(dnaCountsClean, Chr =="X") %>% select(c(Geneid,totalCountsGene:161)) ## extract X gene counts
+eqtl_y_dna<- filter(dnaCountsClean, Chr =="Y") %>% select(c(Geneid,totalCountsGene:161)) ## extract Y gene counts
+
+reads_pg_dna<-left_join(pgMatOrths,eqtl_x_dna, by = c("id_tx_mat"="Geneid")) %>%
+  left_join(.,eqtl_y_dna, by = c("id_tx_pat" = "Geneid"),suffix = c(".mat",".pat")) %>% 
+  drop_na() %>% select(-flag_tx_pat,-flag_tx_mat) %>% 
+  unique() %>%
+  rowwise() %>% 
+  mutate(totalCountAll=(totalCountsGene.mat+totalCountsGene.pat)) %>%
+  ungroup() %>% filter(totalCountAll >20) %>%
+  relocate(c(pairID:male_mean.mat, totalCountsGene.pat:male_mean.pat,totalCountAll))
+
+ggplot(reads_pg_dna,aes(x=male_mean.mat,y=male_mean.pat)) + geom_point() +
+    geom_abline(slope = 1, intercept = 0, linetype=1) +
+  theme_bw()+
+  geom_smooth(method ="lm") +
+  xlab("mean dna read counts of X gametolog") +
+  ylab("mean dna read counts of Y gametolog") 
+
+colnames(reads_pg_dna)
+```
+
+```{r}
+ase_data_dna<-reads_pg_dna %>% select(c(pairID,contains("M", ignore.case = FALSE ))) %>% column_to_rownames(var ="pairID")
+## ase matrix
+IDs<-colnames(ase_data_dna)
+library(gtools)
+sorted_col_names <- mixedsort(IDs)
+ase_data_dna <- ase_data_dna[, sorted_col_names]
+#colnames(ase_data)
+# yay!!
+sample<-str_remove(sorted_col_names,"..at") # tm1 tm1 etc.
+allele<-str_extract(sorted_col_names,".at$") # mat pat mat pat
+
+colInfo<-data.frame(sorted_col_names,sample,allele) # wooo
+
+ase_matrix_dna<-as.matrix(ase_data_dna)
+design<- ~sample+allele
+
+m <- 75
+
+dds <- DESeqDataSetFromMatrix(ase_data_dna, colInfo, design)
+sizeFactors(dds) <- rep(1, 2*m)
+dds <- DESeq(dds, fitType="local")
+
+resultsNames(dds)
+
+res.allele <- results(dds, name="allele_pat_vs_mat")
+head(res.allele$log2FoldChange)
+
+adj_pvals_dna<-res.allele$padj
+
+
+pvals_genes_dna<-data.frame(res.allele@rownames,res.allele$padj,res.allele$log2FoldChange,res.allele$lfcSE) #%>%
+reads_pg_pvals_dna<-inner_join(reads_pg_dna, pvals_genes_dna, by =c("pairID" ="res.allele.rownames"))%>%
+  mutate(sigTest = 
+           case_when((res.allele.padj < 0.1) ~ "sig",
+                     TRUE ~"nonsig" )) %>%
+  mutate(region = case_when(start_tx_pat < 45000000 ~ "PAR",
+                            TRUE ~ "SLR")) %>% relocate(c(pairID:totalCountAll,res.allele.padj:region))
+  #relocate(c(pairID:male_mean.mat, meanCounts.pat:male_mean.pat, res.allele.padj:sigTest))
+  #mutate(sigTest = case_when((res.allele.padj < 0.01) ~ "sig", TRUE ~ "nonsig"))
+
+write_csv(reads_pg_pvals_dna, "dna_ase_results_eqtl.csv")
+#head(reads_pg_pvals)
+
+badgenes_dna<-filter(reads_pg_pvals_dna, sigTest == "sig" & abs(res.allele.log2FoldChange) >1) %>% select(pairID, id_tx_mat, id_tx_mat)
+
+
+
+
+fold_change_cutoffs <- c(0.5, 1, 1.5, 2)
+obs_tables_dna <- lapply(fold_change_cutoffs, function(cutoff) {
+  get_obs_table(reads_pg_pvals_dna, cutoff)
+})
+combined_table_dna <- do.call(rbind, obs_tables_dna)
+print(combined_table_dna)
+write_csv(combined_table_dna, "n_xy_oe_DNA_eQTL_lfcRanges.csv")
+
+length(setdiff(test$id_tx_pat, badgenes$Geneid))
+length(setdiff(badgenes$Geneid,test$id_tx_pat))
+
+
+```
+
+
+
