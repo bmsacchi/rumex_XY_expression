@@ -329,8 +329,6 @@ summary(res.allele)
 
 ggplot(pvals_genes) +geom_histogram(aes(res.allele.log2FoldChange))
 
-
-
 # ggplot(pvals_genes) + 
 #   geom_point(aes(x=ratio,y=(maleTotal.mat/femTotal.mat))) +
 #   ylim(0,1)+
@@ -338,8 +336,6 @@ ggplot(pvals_genes) +geom_histogram(aes(res.allele.log2FoldChange))
 
 #ggplot(pvals_genes) +geom_point(aes(x=start_tx_pat,y=res.allele.log2FoldChange)) 
 #ggplot(pvals_filtered) +geom_point(aes(x=start_tx_pat,y=res.allele.log2FoldChange)) 
-
-
 
 ## join pvals to read files
 

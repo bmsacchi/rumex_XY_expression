@@ -12,3 +12,6 @@ logs/
 .Rhistory
 Rhastxy.april2024.stephen.coge.aligncoords.gcoords.ks.txt
 readCountsRNAeQTL/*featureCounts*
+dna_ase_results_eqtl.csv
+rna_ase_results_eqtl.csv
+
