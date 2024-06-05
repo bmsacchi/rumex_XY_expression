@@ -1,4 +1,5 @@
-samples = ['RsgL1','RsgL2','RsgL3']
+#samples = ['RsgL1','RsgL2','RsgL3']
+samples = 'Rsg_1_1'
 ### workflow ###
 
 # This rule establishes the names of output files from other rules
@@ -26,8 +27,8 @@ rule star_index:
 # This rule maps rna reads to genome
 rule star_pe_multi:
     input:
-        fq1="fastqs/sagittatus/{sample}_R1.fastq.gz",
-        fq2="fastqs/sagittatus/{sample}_R2.fastq.gz",
+        fq1="fastqs/sagittatus/{sample}_RNA_S121_L004_R1_001.fastq.gz",
+        fq2="fastqs/sagittatus/{sample}_RNA_S121_L004_R2_001.fastq.gz",
         idx="STARindex/Sagittatus"
     output:
         aln="RNAbams/Sagittatus/{sample}Aligned.sortedByCoord.out.bam",

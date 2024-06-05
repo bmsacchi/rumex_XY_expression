@@ -13,19 +13,21 @@ PREFIX = "jpop"
 #with open("RNA.samples_leaf.txt", "r") as file:
 #    samples = [line.strip() for line in file if line.strip()]
 
-with open("../Rumex_eQTL/RNA.samples_pollen.txt","r") as file:
-    samples = [line.strip() for line in file if line.strip()]
+#with open("../Rumex_eQTL/RNA.samples_pollen.txt","r") as file:
+#    samples = [line.strip() for line in file if line.strip()]
+
+samples = ["RNAbams/Sagittatus/RsgL1Aligned.sortedByCoord.out.bam
 
 
 rule all:
      input:
           #fc = expand("readCountsRNAeQTL/{sample}.featureCounts", sample = samples), 
-          mc = "readCountsRNAeQTL/rhastTXeQTLrna_pollen.txt" 
+          mc = "readCountsRNAeQTL/sagittatusRnaCounts.txt" 
 
 rule rna_read_counts:
     input:
-        aln= 'RNAbams/eQTL_rna/{sample}Aligned.sortedByCoord.out.bam',
-        anno= 'genome/merged_TX_noMatPARlarge_txanno.gtf'
+        aln= 'RNAbams/Sample/{sample}Aligned.sortedByCoord.out.bam',
+        anno= '/ohta2/Rumex/Dovetail_R_sagittatus/final_scaffolded/sag_hap1.gff'
     output:
         fc = temp("readCountsRNAeQTL/{sample}.featureCounts"),
         fcsum= "readCountsRNAeQTL/{sample}.featureCounts.summary"
