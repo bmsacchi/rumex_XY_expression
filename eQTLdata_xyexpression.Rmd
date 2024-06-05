@@ -591,11 +591,11 @@ ggsave("silenced_yunderexpressed_dosagecomp.jpg",w = 7, h = 5)
 
 Dosage compensation plot combined
 ```{r}
-completely_silenced<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2FoldChange < 1 & male_mean.pat == 0) %>%
-  select(id_tx_mat)
+#completely_silenced<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2FoldChange < 1 & male_mean.pat == 0) %>%
+#  select(id_tx_mat)
 x_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2FoldChange < 1) %>%
-  select(id_tx_mat)
-y_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2FoldChange > 1) %>% select(id_tx_mat)
+  select(id_tx_mat, id_tx_pat)
+y_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2FoldChange > 1) %>% select(id_tx_mat,id_tx_pat)
 
 
 normcounts_clean<-as.data.frame(normalized_counts) %>% 
@@ -634,16 +634,104 @@ ggsave("combined_dc_plot_hemi_ysilence.jpg", h = 6, w =8)
 Messing around w KS plots
 ```{r}
 ks_raw<-read_table("Rhastxy.april2024.stephen.coge.aligncoords.gcoords.ks.txt", skip = 2) 
-
+ks_colnames<-colnames(ks_raw)
+ks_raw<-read_table("Rhastxy.april2024.stephen.coge.aligncoords.gcoords.ks.txt", comment = "#", col_names = ks_colnames)
 mydelim = "\\|\\|"
 col_parts_1 <- as.vector(unlist(str_split(colnames(ks_raw)[4],  mydelim)))
 col_parts_2<- as.vector(unlist(str_split(colnames(ks_raw)[8],  mydelim)))
 
 
 # Apply the function to the dataframe
-ks_data_separated <- ks_raw %>% separate_wider_delim(col = 4, delim = mydelim, names = col_parts_1, too_few = "align_start")
-
+ks_data_separated <- ks_raw %>% separate(
+  col = `chr1||start1||stop1||name1||strand1||type1||db_feature_id1||genome_order1||percent_id1`, 
+                                         sep = mydelim, into = col_parts_1) %>%
+  separate(col = `chr2||start2||stop2||name2||strand2||type2||db_feature_id2||genome_order2||percent_id2`,
+           sep = mydelim, into = col_parts_2) %>% select(-"b<db_genome_id>_<chr>",-"a<db_genome_id>_<chr>",-GEVO_link) %>%
+  dplyr::rename("Ks"="#Ks") %>% mutate(id_tx_pat = gsub("-RA","",name1)) %>% mutate(id_tx_mat = gsub("-RA","",name2))
 # View the modified dataframe
-print(ks_data_separated)
+colnames(ks_data_separated)
+
+### combine with y x exp data
+
+reads_pg_pvals_ks <-left_join(reads_pg_pvals, ks_data_separated, by = c("id_tx_mat","id_tx_pat")) %>% 
+  relocate(Ks:block_score) %>%
+  drop_na() filter
+
+ggplot(reads_pg_pvals_ks) + 
+         geom_point(aes(y = Ks, x = male_mean.pat/male_mean.mat)) +
+         theme_classic() + xlim(0,2) +ylim(0,0.3) 
+ggsave("Ks_readRatio_filter.pdf")
+ggsave("Ks_readTa")
+ggplot(reads_pg_pvals_ks) + geom_point(aes(y = Ks, x = res.allele.log2FoldChange)) #+ ylim(0,0.5)  +xlim(-10,10)
+
+```
+- sliding windows?
+- color code by site type (silenced etc.)
+```{r}
+ks_data_types<- ks_data_separated %>% mutate_at(c('start1', 'start2'), as.numeric) %>%
+     mutate(genetype = case_when(
+    (id_tx_mat%in%x_overexpressed$id_tx_mat & id_tx_pat%in%x_overexpressed$id_tx_pat) ~ "xOverexp",
+    (id_tx_mat%in%y_overexpressed$id_tx_mat & id_tx_pat%in%y_overexpressed$id_tx_pat) ~ "yOverexp", TRUE ~ "other")) %>%  
+    filter(Ks < 0.3) %>% filter(chr1  =="Y" & chr2 =="X")
+
+ggplot(ks_data_types) + geom_point(aes(y = Ks, x = start2, color = genetype)) + 
+  scale_color_manual(values=alpha(c("grey", "blue", "green"),c(0.2, 0.5, 0.5))) + ylab("Ks between X and Y genes") + xlab("gene start position on X chromosome") +
+  theme_classic() + geom_vline(xintercept = 220e6, linetype = "dashed")# scale_x_continuous(breaks = seq(0,500e6,100e6)) +theme_classic()
+ggsave("Ks_labels_xcoord.jpg",h=5,w=7)
+
+ggplot(ks_data_types) + geom_point(aes(y = Ks, x = start1, color = genetype)) + 
+  scale_color_manual(values=alpha(c("grey", "blue", "green"),c(0.2, 0.5, 0.5))) + ylab("Ks between X and Y genes") + xlab("gene start position on Y chromosome") +
+  theme_classic() +
+  geom_vline(xintercept = 45e6, linetype = "dashed")
+ggsave("Ks_labels_ycoord.pdf",h=5,w=7)
+
+```
+
+genome Ks plot for the hell of it
+```{r}
+ks_mb<-ks_data_separated %>% mutate_at(c('start1', 'start2'), as.numeric) %>% 
+  mutate(start1_mb = (start1/1e6)) %>%
+  mutate(start2_mb = (start2/1e6))
+library(slider)
+windowmaker_1<- function(df,win,ks){df %>% filter(Ks<ks) %>%
+  group_by(chr1) %>%
+  arrange(name1,chr1, start1_mb) %>%
+  mutate(Ks_win = slider::slide_dbl(Ks, median, .before = win/2, .after = win/2,.step = 1,.complete =T))}
+
+windowmaker_2<- function(df,win,ks){df %>% filter(Ks<ks) %>%
+  group_by(chr2) %>%
+  arrange(name2,chr2, start2_mb) %>%
+  mutate(Ks_win = slider::slide_dbl(Ks, median, .before = win/2, .after = win/2,.step = 1,.complete =T))}
+
+ks_win100<-windowmaker_1(ks_mb,win = 100,0.3)
+ks_win100_x<-windowmaker_2(ks_mb, win = 100, 0.3)
+
+ks_win50<-windowmaker_1(ks_mb,win = 50,0.3)
+ks_win20_x<-windowmaker_2(ks_mb, win = 20, 0.3)
+library(RColorBrewer)
+ggplot(filter(ks_win50,!grepl("scaffold", chr1)), aes(start1_mb,group = chr1)) +  
+   geom_line(aes(y=Ks_win, colour = chr1)) +
+   facet_grid(~chr1,scales="free_x") +
+   ylim(0,0.05) +
+  scale_color_brewer(palette = "Dark2") +
+  xlab("Y-bearing Haplotype\nposition(Mb)") +
+  ylab("Median Ks\n(100 gene windows)") 
+
+ggsave("Ks_coords_allchr_TX_hap2_20win.jpg", h = 5, w = 9)
+
+
+ggplot(filter(ks_win20_x,!grepl("scaffold", chr2)), aes(start2_mb,group = chr2)) +  
+   geom_line(aes(y=Ks_win, colour = chr2)) +
+   facet_grid(~chr2,scales="free_x") +
+   ylim(0,0.05) +
+  scale_color_brewer(palette = "Dark2") +
+  xlab("X-bearing Haplotype\nposition(Mb)") +
+  ylab("Median Ks\n(100 gene windows)") 
+ggsave("Ks_coords_allchr_TX_hap1_20win.pdf", h = 5, w = 9)
+
+```
+
+```{r}
+
 ```
 
