@@ -1,0 +1,4 @@
+# goal: gene-level branch-specific dn/ds for X and Y gametologs using hyphy
+# params: BUSTED model (I think)
+# input: need codon alignments for all the genes
+
