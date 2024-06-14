@@ -2,3 +2,24 @@
 # params: BUSTED model (I think)
 # input: need codon alignments for all the genes
 
+# use MUSCLE and REvtrans as per Mark's paml pipeline?
+
+## 1
+# get transcript .fa files from sagittatus
+gffread -w sagittatus.transcripts.fa -g sagittatus_hap1.fa Sagittatus_hap1.gff_polished
+## fix sag gene names
+sed -i 's/>/>Rsag_/' sagittatus.transcripts.fasta
+
+# run orthofinder on just those 4 sets of transcripts
+# might need to redo with CDS...
+
+# orthofinder
+
+hyphy ../../../hyphy-analyses/codon-msa/pre-msa.bf --input Results_Jun10/Single_Copy_Orthologue_Sequences/OG0007075.fa
+
+muscle -in OG0007075.fa_protein.fas -out OG0007075.msa
+
+hyphy ../../../hyphy-analyses/codon-msa/post-msa.bf /ohta2/bianca.sacchi/rumex_ase_TX/hyphy/orthofinder4/Results_Jun10/Single_Copy_Orthologue_Sequences/OG0007075.msa --nucleotide-sequences /ohta2/bianca.sacchi/rumex_ase_TX/hyphy/orthofinder4/Results_Jun10/Single_Copy_Orthologue_Sequences/OG0007075.fa_nuc.fas --output example.msa
+
+# parse json outputs
+jq -r --arg filename "OG0007317.fa" '.["branch attributes"]["0"] | to_entries | map([$filename, .key, .value.dN, .value.dS]) | (["OG","branch", "dN", "dS"] | @csv), (.[] | @csv)' OG0007317.fa.json | column -t -s, > OG0007317.fa.csv
