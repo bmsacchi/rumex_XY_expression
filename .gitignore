@@ -10,6 +10,13 @@ logs/
 *.html
 .DS_Store
 .Rhistory
+hyphy/BUSTED/
+hyphy/FitMG94/
+hyphy/muscle_alignments/
+hyphy/nuc_fastas/
+hyphy/orthofinder4/
+hyphy/parsed_output/
+hyphy/pyparsed_output/
 Rhastxy.april2024.stephen.coge.aligncoords.gcoords.ks.txt
 readCountsRNAeQTL/*featureCounts*
 dna_ase_results_eqtl.csv
