@@ -1,0 +1,89 @@
+---
+title: "Ks estimates calculated using Hyphy"
+output: html_notebook
+---
+
+# goal
+
+Do these Ks estimates compare to coge? 
+What are the dn/ds patterns?
+Am I missing important orthologs?
+Are the results as expected?
+
+```{r}
+library(tidyverse)
+library(vroom)
+```
+
+
+```{r}
+hyphy_data<-read_csv("hyphy/all_ks.csv") %>% 
+  mutate(clean_branch = str_remove(branch, "_RA_1")) %>%
+  select(-branch) %>% dplyr::rename(.,branch = clean_branch) %>%
+  mutate(taxa = ifelse(grepl("Rsag", branch), "sagittatus",
+              ifelse(grepl("TX_maternal",branch), "rhast_tx_mat",
+              ifelse(grepl("TX_paternal", branch), "rhast_tx_pat", 
+              ifelse(grepl("buc", branch), "bucephalophorus", 
+              ifelse(grepl("Node2", branch), "node2", 
+               ifelse(grepl("Node3", branch), "node3", NA))))))) 
+
+hyphy_wide<-hyphy_data %>% pivot_wider(id_cols = OG, names_from =taxa, values_from = c("branch","dN","dS")) %>%
+  unite("pairID", c("branch_rhast_tx_mat", "branch_rhast_tx_pat"), sep = "_", remove = FALSE)
+
+hyphy_match<- hyphy_wide %>% #filter(pairID%in%pgMatOrths$pairID)
+     filter(pairID%in%reads_pg$pairID) ## only 99 out of 267 match!
+# dumb!
+
+# ok rerun with the correct genes I guess. FINE!
+#sigh.
+
+```
+## back to the beginning
+# get list of genes you want to compare
+
+```{r}
+
+pgMat_tx<-vroom("pangenes_tx/tx_mat_pangenes_forHyphy.txt.gz",show_col_types = FALSE)
+pgMat_PASS_ks<-filter(pgMat_tx,(flag == "PASS")) %>% #& 
+                        #(genome == "tx_mat"|
+                        #   genome == "tx_pat"|
+                         #  genome=="bucephalophorus"|genome == "sagittatus")) %>%
+   select(pgID,genome,id,chr,start, end, flag) %>% 
+   group_by(pgID,genome,flag) %>% 
+   filter(n() == 1) %>% 
+   ungroup() %>%
+   distinct() %>%
+   pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) %>% 
+   #filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
+   mutate(across(.cols = c("id_tx_pat","id_tx_mat","id_bucephalophorus","id_sagittatus"), 
+                 ~str_replace(.,"-RA$",""))) %>%
+   #unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct() %>%
+  drop_na()
+
+pgIDs_PASS<- select(pgMat_PASS_ks, pgID)
+
+
+pgMat_NSOrths_ks<- pgMat_tx %>% 
+  select(pgID,genome,id,chr,start, end, flag) %>% 
+  #filter((genome == "tx_mat") |(genome == "tx_pat")) %>%
+  filter(flag != "array") %>%
+  group_by(pgID,genome) %>% 
+  filter(n() == 1) %>% 
+  filter(!pgID%in%pgIDs_PASS$pgID) %>%
+  ungroup() %>% 
+  distinct() %>% 
+  pivot_wider(names_from = c(genome), 
+  values_from = c(id,chr,start,end,flag)) %>%
+  #filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat)) %>%
+  drop_na() %>%
+  filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
+  mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
+                ~str_replace(.,"-RA$",""))) #%>%
+  #unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) 
+
+pgMatOrths_ks<-bind_rows(pgMat_PASS_ks,pgMat_NSOrths_ks) %>% 
+  select(-pgID) %>% select(id_tx_mat:id_tx_pat)
+write_csv(pgMatOrths_ks, "hyphy/orths.csv")
+```
+
+
