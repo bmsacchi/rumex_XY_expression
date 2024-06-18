@@ -57,7 +57,7 @@ pgMat_PASS_ks<-filter(pgMat_tx,(flag == "PASS")) %>% #&
    #filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
    mutate(across(.cols = c("id_tx_pat","id_tx_mat","id_bucephalophorus","id_sagittatus"), 
                  ~str_replace(.,"-RA$",""))) %>%
-   #unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct() %>%
+   unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct() %>%
   drop_na()
 
 pgIDs_PASS<- select(pgMat_PASS_ks, pgID)
@@ -78,12 +78,15 @@ pgMat_NSOrths_ks<- pgMat_tx %>%
   drop_na() %>%
   filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
   mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
-                ~str_replace(.,"-RA$",""))) #%>%
-  #unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) 
+                ~str_replace(.,"-RA$",""))) %>%
+  unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) 
 
 pgMatOrths_ks<-bind_rows(pgMat_PASS_ks,pgMat_NSOrths_ks) %>% 
-  select(-pgID) %>% select(id_tx_mat:id_tx_pat)
+  #select(-pgID) %>% 
+  select(pgID,id_tx_mat:id_tx_pat)
 write_csv(pgMatOrths_ks, "hyphy/orths.csv")
+
+filter(pgMatOrths_ks, pairID%in%pgMatOrths$pairID)
 ```
 
 
