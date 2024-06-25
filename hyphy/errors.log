@@ -1,3 +1,9 @@
 
-Error:Illegal right hand side in call to Topology id = ...; it must be a string, a Newick tree spec or a topology
-Illegal right hand side in call to Topology id = ...; it must be a string, a Newick tree spec or a topology
+Error:Could not read batch file '/ohta2/bianca.sacchi/rumex_ase_TX/hyphy/FitMG94.bf'.
+Path stack:
+	/ohta1/bianca.sacchi/miniconda3/envs/hyphy/share/hyphy/
+	/ohta2/bianca.sacchi/rumex_ase_TX/hyphy/
+Could not read batch file '/ohta2/bianca.sacchi/rumex_ase_TX/hyphy/FitMG94.bf'.
+Path stack:
+	/ohta1/bianca.sacchi/miniconda3/envs/hyphy/share/hyphy/
+	/ohta2/bianca.sacchi/rumex_ase_TX/hyphy/

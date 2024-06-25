@@ -23,3 +23,5 @@ hyphy ../../../hyphy-analyses/codon-msa/post-msa.bf /ohta2/bianca.sacchi/rumex_a
 
 # parse json outputs
 jq -r --arg filename "OG0007317.fa" '.["branch attributes"]["0"] | to_entries | map([$filename, .key, .value.dN, .value.dS]) | (["OG","branch", "dN", "dS"] | @csv), (.[] | @csv)' OG0007317.fa.json | column -t -s, > OG0007317.fa.csv
+
+(snakemake) [bianca.sacchi@esc3055m-big-wright workflow]$ awk 'FS ="," {if (NR!=1) print $1}' ../orths.csv > pgIDs.txt
