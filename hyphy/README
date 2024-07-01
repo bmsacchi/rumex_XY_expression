@@ -24,4 +24,16 @@ hyphy ../../../hyphy-analyses/codon-msa/post-msa.bf /ohta2/bianca.sacchi/rumex_a
 # parse json outputs
 jq -r --arg filename "OG0007317.fa" '.["branch attributes"]["0"] | to_entries | map([$filename, .key, .value.dN, .value.dS]) | (["OG","branch", "dN", "dS"] | @csv), (.[] | @csv)' OG0007317.fa.json | column -t -s, > OG0007317.fa.csv
 
-(snakemake) [bianca.sacchi@esc3055m-big-wright workflow]$ awk 'FS ="," {if (NR!=1) print $1}' ../orths.csv > pgIDs.txt
+awk 'FS ="," {if (NR!=1) print $1}' ../orths.csv > pgIDs.txt
+
+#### preprocess genespace pangene output 
+- one-one-one-one orthologs (syntenic and nonsyntenic) between Rsag,Rbuc,Rhast tx hap1 and hap2
+- annotations created using same pipeline using maker (and other stuff) by Yunchen Gong
+- genespace input: gffs and peptide fastas
+
+Rscript parse_genespacePangenes.R ../../GenespaceRumexComparative/gsRun2024_06_24/pangenes/tx_mat_pangenes.txt.gz 
+
+output file: orthsUpdatedAnnos.csv.gz 
+
+#### extract pgIDs
+awk 'FS ="," {if (NR!=1) print $1}' ../orths.csv > pgIDs.txt

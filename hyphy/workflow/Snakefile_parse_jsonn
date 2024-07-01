@@ -1,0 +1,45 @@
+from os import path
+
+import numpy as np
+
+import pandas as pd
+
+import os.path as path
+
+
+with open ("updated_json.txt","r") as file:
+    samples = [line.strip() for line in file if line.strip()]
+
+rule all:
+    input:
+       parsed = expand("../pyparsed_output_updated/{sample}.txt", sample = samples),
+       outcsv = "../all_ks_updated.csv"
+
+rule json_parse:
+    input:
+        "../FitMG94_local_updated/{sample}.json"
+    output:
+        "../pyparsed_output_updated/{sample}.txt"
+    resources:
+        tmpdir = "/ohta2/bianca.sacchi/tmp"
+    script:
+        "parse_json.py"
+
+def list_txt_files(directory):
+    return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.txt')]
+
+# Directory where .txt files are located (adjust as per your directory structure)
+txt_files_directory = "../pyparsed_output_updated"
+
+# List of .txt files in the directory
+txt_files = list_txt_files(txt_files_directory)
+
+rule concat:
+    input: 
+        expand("{index}", index=txt_files)
+    output:
+        "../all_ks_updated.csv"
+    run:
+        dfs = [pd.read_csv(file) for file in input]
+        concatenated_df = pd.concat(dfs, ignore_index = True)
+        concatenated_df.to_csv(output[0], index = False)

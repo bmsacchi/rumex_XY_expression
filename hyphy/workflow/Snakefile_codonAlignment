@@ -9,28 +9,31 @@ import os.path as path
 # list of "pangenes" from genespace
 # 1-1-1-1 orthologs (syntentic and some non syntentic) shared bw tx_pat,mat, buc and sag
 
-#with open ("pgIDs.txt","r") as file:
-with open ("passed_premsa.txt","r") as file:
-    orthogroups = [line.strip() for line in file if line.strip()]
+#with open ("pgIDs_updated.txt","r") as file:
+#with open ("passed_premsa.txt","r") as file:
+#    orthogroups = [line.strip() for line in file if line.strip()]
+
+with open ("updated_json.txt","r") as file:
+    samples = [line.strip() for line in file if line.strip()]
 
 ## rule all
 rule all:
     input:
-       nucfas = expand("../pgIDfastas/{sample}.fasta_nuc.fas", sample = orthogroups),
-       profas = expand("../pgIDfastas/{sample}.fasta_protein.fas", sample = orthogroups),
-       promsa = expand("../muscle_alignments/{sample}_protein.msa", sample = orthogroups),
-       msa = expand("../muscle_alignments/{sample}.msa", sample = orthogroups),
-       tree = expand("../muscle_alignments/{sample}.msa.treefile", sample = orthogroups),
-       fit = expand("../FitMG94_local/{sample}.json", sample = orthogroups),
-#       txt =  expand("../pyparsed_output/{sample}.txt", sample = orthogroups),
-#       allks = "../all_ks.csv"
+       #nucfas = expand("../pgIDfastas_updated/{sample}.fasta_nuc.fas", sample = orthogroups),
+       #profas = expand("../pgIDfastas_updated/{sample}.fasta_protein.fas", sample = orthogroups),
+       #promsa = expand("../muscle_alignments_updated/{sample}_protein.msa", sample = orthogroups),
+       #msa = expand("../muscle_alignments_updated/{sample}.msa", sample = orthogroups),
+       #tree = expand("../muscle_alignments_updated/{sample}.msa.treefile", sample = orthogroups),
+       #fit = expand("../FitMG94_local_updated/{sample}.json", sample = orthogroups),
+       txt =  expand("../pyparsed_output_updated/{sample}.txt", sample = samples),
+       allks = "../all_ks.csv"
 
 rule premsa:
     input: 
-       fas =  "../pgIDfastas/{sample}.fasta"
+       fas =  "../pgIDfastas_updated/{sample}.fasta"
     output: 
-       nucfas= "../pgIDfastas/{sample}.fasta_nuc.fas",
-       profas= "../pgIDfastas/{sample}.fasta_protein.fas"
+       nucfas= "../pgIDfastas_updated/{sample}.fasta_nuc.fas",
+       profas= "../pgIDfastas_updated/{sample}.fasta_protein.fas"
     log: 
        stdout="logs/premsa/{sample}.stdout",
        stderr="logs/premsa/{sample}.stderr"
@@ -40,14 +43,14 @@ rule premsa:
        tmpdir = "/ohta2/bianca.sacchi/tmp"
     shell: 
        """
-       hyphy ../../../hyphy-analyses/codon-msa/pre-msa.bf --input {input.fas} > {log.stdout} 
+       hyphy /ohta2/bianca.sacchi/bin/hyphy-analyses/codon-msa/pre-msa.bf --input {input.fas} > {log.stdout} 
        """
 
 rule muscle:
     input:
        fas = rules.premsa.output.profas
     output:
-       promsa = "../muscle_alignments/{sample}_protein.msa"
+       promsa = "../muscle_alignments_updated/{sample}_protein.msa"
     conda:
        "hyphy"
     resources:
@@ -62,21 +65,21 @@ rule postmsa:
        promsa = rules.muscle.output.promsa,
        nucfas = rules.premsa.output.nucfas
     output:
-       msa = "../muscle_alignments/{sample}.msa"
+       msa = "../muscle_alignments_updated/{sample}.msa"
     conda:
         "hyphy"
     resources:
        tmpdir = "/ohta2/bianca.sacchi/tmp"
     shell:
        """
-       hyphy ../../../hyphy-analyses/codon-msa/post-msa.bf {input.promsa} --nucleotide-sequences {input.nucfas} --output {output}
+       hyphy  /ohta2/bianca.sacchi/bin/hyphy-analyses/codon-msa/post-msa.bf {input.promsa} --nucleotide-sequences {input.nucfas} --output {output}
        """
 
 rule trees:
     input: 
         rules.postmsa.output.msa
     output:
-        "../muscle_alignments/{sample}.msa.treefile"
+        "../muscle_alignments_updated/{sample}.msa.treefile"
     conda:
         "iqtree"
     resources:
@@ -88,37 +91,38 @@ rule trees:
 
 rule hyphyFitMG94:
     input:
-        msa = rules.postmsa.output.msa,
-        treefile = rules.trees.output
+        msa = expand("../muscle_alignments_updated/{sample}.msa",sample = samples),
+        treefile = expand("../muscle_alignments_updated/{sample}.msa.treefile", sample = samples)
     output:
-        "../FitMG94_local/{sample}.json"
+        "../FitMG94_local_updated/{sample}.json"
     conda:
         "hyphy"
     resources:
         tmpdir = "/ohta2/bianca.sacchi/tmp"
     shell:
         """
-        hyphy ../../../hyphy-analyses/FitMG94/FitMG94.bf --alignment {input.msa} --tree {input.treefile} --type local --output {output}
+        hyphy  /ohta2/bianca.sacchi/bin/hyphy-analyses/FitMG94/FitMG94.bf --alignment {input.msa} --tree {input.treefile} --type local --output {output}
         """
+
 
 rule json_parse:
     input:
-        rules.hyphyFitMG94.output
+        expand("../FitMG94_local_updated/{sample}.json", sample = samples)
     output:
-        "../pyparsed_output_local/{sample}.txt"
+        "../pyparsed_output_updated/{sample}.txt"
     resources:
         tmpdir = "/ohta2/bianca.sacchi/tmp"
     script:
         "parse_json.py"
 
 
-#rule concat:
-#    input: 
-#        rules.json_parse.output
-#    output:
-#        "../all_ks.csv"
-#    run:
-#        dfs = [pd.read_csv(file) for file in input]
-#        concatenated_df = pd.concat(dfs, ignore_index = True)
-#        concatenated_df.to_csv(output[0], index = False)
+rule concat:
+    input: 
+        rules.json_parse.output
+    output:
+        "../all_ks.csv"
+    run:
+        dfs = [pd.read_csv(file) for file in input]
+        concatenated_df = pd.concat(dfs, ignore_index = True)
+        concatenated_df.to_csv(output[0], index = False)
 

@@ -1,9 +1,11 @@
 import csv
+import sys
 from Bio import SeqIO
+
 
 # Step 1: Parse the CSV file to extract the pgID and gene IDs
 pangene_dict = {}
-with open("../orths.csv", mode="r") as infile:
+with open("../orthsUpdatedAnnos.csv", mode="r") as infile:
     reader = csv.DictReader(infile)
     for row in reader:
         pgID = row["pgID"]
@@ -24,11 +26,11 @@ def get_gene_sequences(fasta_file):
 tx_maternal_seqs = get_gene_sequences("../nuc_fastas/transcript_fastas/TX_maternal.all.maker.transcripts.fasta")
 tx_paternal_seqs = get_gene_sequences("../nuc_fastas/transcript_fastas/TX_paternal.all.maker.transcripts.fasta")
 buc_seqs = get_gene_sequences("../nuc_fastas/transcript_fastas/buc.all.maker.transcripts.fasta")
-rsag_seqs = get_gene_sequences("../nuc_fastas/transcript_fastas/sagittatus.transcripts.fasta")
+rsag_seqs = get_gene_sequences("../nuc_fastas/transcript_fastas/Rsag_hap1.all.maker.transcripts.fasta")
 
 # Step 3: Create a new fasta file for each pgID and write the corresponding sequences
 for pgID, genes in pangene_dict.items():
-    filename = f"../pgIDfastas/pgID{pgID}.fasta"
+    filename = f"../pgIDfastas_updated/pgID{pgID}.fasta"
     with open(filename, "w") as outfile:
         for species, gene_id in genes.items():
             seq = None

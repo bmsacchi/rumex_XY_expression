@@ -1,3 +1,9 @@
 orths.csv
-pgIDfastas/
+orthsUpdatedAnnos.csv
+pgIDfastas_updated/
+FitMG94_local_updated/
+muscle_alignments_updated/
+pyparsed_output_updated/
+all_ks_attempt1.csv.gz
 workflow/logs/
+*.csv
