@@ -11,7 +11,7 @@ with open(file_path, 'r') as file:
 
 file_name = os.path.basename(file_path)
 
-patterns = [r'Node\d+$',r'^Rsag_NChap2_final_\d+_RA_1$',r'^TX_maternal_\d+_RA_1$',r'^TX_paternal_\d+_RA_1$',r'^buc_\d+_RA_1$']
+patterns = [r'Node\d+$',r'^Rsag_hap1_\d+_RA_1$',r'^TX_maternal_\d+_RA_1$',r'^TX_paternal_\d+_RA_1$',r'^buc_\d+_RA_1$']
 
 branch_attributes = data.get("branch attributes", {}).get("0", {})
 
@@ -23,15 +23,21 @@ for pattern in patterns:
 rows = []
 
 for node in nodes_of_interest:
+    branch_info = branch_attributes[node]
+    confidence_intervals = branch_info.get("Confidence Intervals", {})
+
     row = {
         "OG": file_name,  # Use the file name for the OG column
         "branch": node,
         "dN": branch_attributes[node].get("dN"),
-        "dS": branch_attributes[node].get("dS")
+        "dS": branch_attributes[node].get("dS"),
+        "LB": confidence_intervals.get("LB"),
+        "MLE": confidence_intervals.get("MLE"),
+        "UB": confidence_intervals.get("UB")
     }
     rows.append(row)
 
-df = pd.DataFrame(rows, columns=["OG", "branch", "dN", "dS"])
+df = pd.DataFrame(rows, columns=["OG", "branch", "dN", "dS", "LB", "MLE", "UB"])
 
 
 # Save the DataFrame to a CSV file if needed

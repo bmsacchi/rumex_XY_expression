@@ -1,11 +1,8 @@
 from os import path
-
 import numpy as np
-
 import pandas as pd
-
 import os.path as path
-
+import gzip
 
 with open ("updated_json.txt","r") as file:
     samples = [line.strip() for line in file if line.strip()]
@@ -13,7 +10,7 @@ with open ("updated_json.txt","r") as file:
 rule all:
     input:
        parsed = expand("../pyparsed_output_updated/{sample}.txt", sample = samples),
-       outcsv = "../all_ks_updated.csv"
+       outcsv = "../all_ks_updated.csv.gz"
 
 rule json_parse:
     input:
@@ -25,21 +22,30 @@ rule json_parse:
     script:
         "parse_json.py"
 
-def list_txt_files(directory):
-    return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.txt')]
+
+#def list_txt_files(directory):
+#    return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.txt')]
 
 # Directory where .txt files are located (adjust as per your directory structure)
 txt_files_directory = "../pyparsed_output_updated"
 
 # List of .txt files in the directory
-txt_files = list_txt_files(txt_files_directory)
+#txt_files = list_txt_files(txt_files_directory)
 
 rule concat:
     input: 
-        expand("{index}", index=txt_files)
+        expand("../pyparsed_output_updated/{index}.txt", index=samples)
     output:
-        "../all_ks_updated.csv"
+        temp("../all_ks_updated.csv")
     run:
         dfs = [pd.read_csv(file) for file in input]
         concatenated_df = pd.concat(dfs, ignore_index = True)
-        concatenated_df.to_csv(output[0], index = False)
+        concatenated_df.to_csv(output[0], index = False) 
+
+rule gzip:
+    input:
+        rules.concat.output
+    output:
+        "../all_ks_updated.csv.gz"
+    shell:
+        "gzip {input}"
