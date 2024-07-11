@@ -1,94 +1,262 @@
 ---
 title: "Ks estimates calculated using Hyphy"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
+editor_options: 
+  markdown: 
+    wrap: sentence
 ---
 
 # goal
 
-Do these Ks estimates compare to coge? 
+Do these Ks estimates compare to coge?
 What are the dn/ds patterns?
 Am I missing important orthologs?
 Are the results as expected?
 
-```{r}
-library(tidyverse)
-library(vroom)
+```{r warning=FALSE}
+library(tidyverse, quietly = TRUE)
+library(vroom, quietly = TRUE)
 ```
 
+### read in ks dataframe
 
 ```{r}
-hyphy_data<-read_csv("hyphy/all_ks.csv") %>% 
+hyphy_data<-read_csv("hyphy/all_ks_updated.csv.gz", show_col_types = FALSE) %>% 
   mutate(clean_branch = str_remove(branch, "_RA_1")) %>%
-  select(-branch) %>% dplyr::rename(.,branch = clean_branch) %>%
+  mutate(og = str_remove(OG, "\\.json")) %>%
+  select(-branch,-OG) %>% 
+  dplyr::rename(.,branch = clean_branch) %>%
+  dplyr::rename(.,OG = og) %>%
   mutate(taxa = ifelse(grepl("Rsag", branch), "sagittatus",
               ifelse(grepl("TX_maternal",branch), "rhast_tx_mat",
               ifelse(grepl("TX_paternal", branch), "rhast_tx_pat", 
               ifelse(grepl("buc", branch), "bucephalophorus", 
               ifelse(grepl("Node2", branch), "node2", 
-               ifelse(grepl("Node3", branch), "node3", NA))))))) 
-
-hyphy_wide<-hyphy_data %>% pivot_wider(id_cols = OG, names_from =taxa, values_from = c("branch","dN","dS")) %>%
-  unite("pairID", c("branch_rhast_tx_mat", "branch_rhast_tx_pat"), sep = "_", remove = FALSE)
-
-hyphy_match<- hyphy_wide %>% #filter(pairID%in%pgMatOrths$pairID)
-     filter(pairID%in%reads_pg$pairID) ## only 99 out of 267 match!
-# dumb!
-
-# ok rerun with the correct genes I guess. FINE!
-#sigh.
-
+               ifelse(grepl("Node3", branch), "node3", NA)))))))
 ```
-## back to the beginning
-# get list of genes you want to compare
+
+### convert to wide format
+
+Add pairID column to compare with orthologues ID's previously
+
+```{r}
+hyphy_wide<-hyphy_data %>% pivot_wider(id_cols = OG, names_from =taxa, values_from = c("branch","dN","dS","LB","UB","MLE")) %>%
+  unite("pairID", c("branch_rhast_tx_mat", "branch_rhast_tx_pat"), sep = "_", remove = FALSE) 
+```
+
+### Add tx mat and tx pat Ks values
+
+this will get X-Y specific synonymous divergence per gene
+
+```{r}
+hyphy_sum <- hyphy_wide %>% 
+  mutate(XYdS = dS_rhast_tx_mat+dS_rhast_tx_pat) %>% 
+  mutate(dnds_calc_tx_mat = dN_rhast_tx_mat/dS_rhast_tx_mat) %>%
+  mutate(dnds_calc_tx_pat = dN_rhast_tx_pat/dS_rhast_tx_pat) %>%
+  mutate(YX_omegaDiff = MLE_rhast_tx_pat-MLE_rhast_tx_mat) %>%
+  mutate(YX_dNdiff = dN_rhast_tx_pat-dN_rhast_tx_mat) %>%
+  select(c(OG,pairID,branch_rhast_tx_mat,branch_rhast_tx_pat,dnds_calc_tx_mat,dnds_calc_tx_pat,
+           dS_rhast_tx_mat,dS_rhast_tx_pat,dN_rhast_tx_mat,dN_rhast_tx_pat,
+          XYdS,MLE_rhast_tx_mat,MLE_rhast_tx_pat,YX_omegaDiff,YX_dNdiff)) %>% drop_na()
+```
+
+### read in X-Y ortholog ASE data
+
+from eQTLdata_xyexpression.Rmd
+
+```{r}
+reads_pg<-read_csv("data/rna_ase_results_eqtl_may17.csv",show_col_types =FALSE)
+## sigtest variable needs fixing - it's fucked up for some reason
+hyphy_sum_match <- left_join(hyphy_sum, reads_pg) %>% drop_na() %>% 
+  mutate(sigTest = 
+           case_when(res.allele.padj < 0.1 & abs(res.allele.log2FoldChange) > 1 ~ "sig",
+                     TRUE ~"nonsig" )) %>% 
+  mutate(yx_readRatio = male_mean.pat/male_mean.mat) %>%
+  mutate(yx_readRatio_plus = yx_readRatio+1)
+
+# 241 obs!
+```
+
+### Ks plots
 
 ```{r}
 
-pgMat_tx<-vroom("pangenes_tx/tx_mat_pangenes_forHyphy.txt.gz",show_col_types = FALSE)
-pgMat_PASS_ks<-filter(pgMat_tx,(flag == "PASS")) %>% #& 
-                        #(genome == "tx_mat"|
-                        #   genome == "tx_pat"|
-                         #  genome=="bucephalophorus"|genome == "sagittatus")) %>%
-   select(pgID,genome,id,chr,start, end, flag) %>% 
-   group_by(pgID,genome,flag) %>% 
-   filter(n() == 1) %>% 
-   ungroup() %>%
-   distinct() %>%
-   pivot_wider(names_from = genome, values_from = c(id,chr,start,end,flag)) %>% 
-   #filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
-   #mutate(across(.cols = c("id_tx_pat","id_tx_mat","id_bucephalophorus","id_sagittatus"), 
-        #         ~str_replace(.,"-RA$",""))) %>%
-   unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) %>%  distinct() %>%
-  drop_na()
 
-pgIDs_PASS<- select(pgMat_PASS_ks, pgID)
+ggplot(hyphy_sum_match, aes(x = XYdS, y = yx_readRatio_plus,color = sigTest,label = OG)) + 
+  geom_point(alpha = 0.5 , aes(color = sigTest, size = res.allele.lfcSE)) +
+    geom_text() +
+  scale_y_continuous(trans = "log10")+
+  #geom_smooth(method = "lm") +
+  theme_classic() + scale_y_continuous(trans = "log10") +
+  ylab("log (y/x expression + 1)") +
+  geom_hline(yintercept = 2, linetype = "dashed")
+#ggsave("plots/Ks_readRatio_hyphy.pdf")
+#ggsave("plots/Ks_readRatio_hyph_filt.pdf")
+#ggsave("plots/Ks_readRatio_colors.pdf")
 
+ggplot(reads_pg_pvals_ks) + geom_point(aes(y = Ks, x = res.allele.log2FoldChange)) #+ ylim(0,0.5)  +xlim(-10,10)
 
-pgMat_NSOrths_ks<- pgMat_tx %>% 
-  select(pgID,genome,id,chr,start, end, flag) %>% 
-  #filter((genome == "tx_mat") |(genome == "tx_pat")) %>%
-  filter(flag != "array") %>%
-  group_by(pgID,genome) %>% 
-  filter(n() == 1) %>% 
-  filter(!pgID%in%pgIDs_PASS$pgID) %>%
-  ungroup() %>% 
-  distinct() %>% 
-  pivot_wider(names_from = c(genome), 
-  values_from = c(id,chr,start,end,flag)) %>%
-  #filter(!is.na(id_tx_pat)) %>% filter(!is.na(id_tx_mat)) %>%
-  drop_na() %>%
-  filter(chr_tx_mat == "X" & chr_tx_pat == "Y") %>%
-  #mutate(across(.cols = c("id_tx_pat","id_tx_mat"), 
-     #           ~str_replace(.,"-RA$",""))) %>%
-  unite(pairID, c("id_tx_mat", "id_tx_pat"),remove = FALSE) 
+ks_lm<-lm(formula = log10(yx_readRatio_plus) ~ XYdS, data = filter(hyphy_sum_match,sigTest == "nonsig"))
+plot(ks_lm)
+summary(ks_lm)
 
-pgMatOrths_ks<-bind_rows(pgMat_PASS_ks,pgMat_NSOrths_ks) %>% 
-  #select(-pgID) %>% 
-  select(pgID,id_tx_mat:id_tx_pat)
-write_csv(pgMatOrths_ks, gzfile("hyphy/orths.csv.gz"))
-
-filter(pgMatOrths_ks, pairID%in%pgMatOrths$pairID)
 ```
 
+For sig snps we see a somewhat negative reslationship between y/x read ratio and Ks Essentially - older gametologs tend to have more X than Y expression especially when the ASE is significant
+
+# what about the relationship with dn/ds
+
+```{r}
+ggplot(hyphy_sum_match, aes(y = YX_omegaDiff, x = yx_readRatio_plus)) + 
+  scale_x_continuous(trans="log10") +
+  #scale_y_continuous(trans="log10") +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm") +
+  ggtitle("dn/ds diff y-x ~ Yexp/Xexp") +
+  stat_cor(aes(label = after_stat(rr.label)), color = "red", geom = "label") +
+  theme_classic() 
+```
+
+```{r}
+library(ggpubr)
+```
+
+```{r}
+lma<-lm(formula = YX_dNdiff ~ yx_readRatio, data=hyphy_sum_match)
+plot(lma)
+lmb <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS, data=hyphy_sum_match)
+plot(lmb)
+lmc <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS + XYdS*yx_readRatio, data=hyphy_sum_match)
+plot(lmc)
+
+plot1<- hyphy_sum_match %>% mutate(my_model = predict(lma)) %>%
+  ggplot() + 
+  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = yx_readRatio)) +
+  geom_abline(intercept = coef(lma)[1],slope = coef(lma)[2])+
+  ggtitle("dNdiff ~ y/xRatio") +
+  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+  theme_classic()
+
+plot2<- hyphy_sum_match %>% mutate(my_model = predict(lmb)) %>%
+  ggplot() + 
+  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = yx_readRatio)) +
+  geom_abline(intercept = coef(lmb)[1],slope = coef(lmb)[2])+
+  ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+  theme_classic()
+
+plot3<- hyphy_sum_match %>% mutate(my_model = predict(lmc)) %>%
+  ggplot() + 
+  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = yx_readRatio)) +
+  geom_abline(intercept = coef(lmc)[1],slope = coef(lmc)[2])+
+  ggtitle("dNdiff ~ y/xRatio + XYds:y/xRatio") +
+  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+  theme_classic()
 
 
+```
+
+```{r}
+library(cowplot)
+plot_grid(plot1+theme(legend.position="none"),plot2+theme(legend.position="none"),plot3+theme(legend.position="none"),ncol =3,align ="h")
+ggsave("plots/dN_lms.pdf",h = 6,w = 14)
+```
+
+```{r}
+lm4<-lm(formula = YX_dNdiff ~ log10(yx_readRatio_plus), data=hyphy_sum_match)
+lm5<-lm(formula = YX_dNdiff ~ log10(yx_readRatio_plus) + XYdS, data=hyphy_sum_match)
+lm6<-lm(formula = YX_dNdiff ~ log10(yx_readRatio_plus) + XYdS:log10(yx_readRatio_plus), data=hyphy_sum_match)
+
+plot4<- hyphy_sum_match %>% mutate(my_model = predict(lm4)) %>%
+  ggplot() + 
+  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log10(yx_readRatio_plus))) +
+  geom_abline(intercept = coef(lm4)[1],slope = coef(lm4)[2],color = "red")+
+  geom_vline(xintercept = log10(2),linetype = "dashed") +
+  ggtitle("dNdiff ~ y/xRatio") +
+  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+  theme_classic()
+
+plot5<- hyphy_sum_match %>% mutate(my_model = predict(lm5)) %>%
+  ggplot() + 
+  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log10(yx_readRatio_plus))) +
+  geom_abline(intercept = coef(lm5)[1],slope = coef(lm5)[2],color = "red")+
+    geom_vline(xintercept = log10(2),linetype = "dashed") +
+  ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+  theme_classic()
+
+plot6<- hyphy_sum_match %>% mutate(my_model = predict(lm6)) %>%
+  ggplot() + 
+  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log10(yx_readRatio_plus))) +
+  geom_abline(intercept = coef(lm6)[1],slope = coef(lm6)[2],color = "red")+
+    geom_vline(xintercept = log10(2),linetype = "dashed") +
+  ggtitle("dNdiff ~ y/xRatio + XYds:y/xRatio") +
+  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+  theme_classic()
+
+plot_grid(plot4+theme(legend.position="none"),plot5+theme(legend.position="none"),plot6+theme(legend.position="none"),ncol =3,align ="h")
+ggsave("plots/dN_lms_log10.pdf",h = 6,w = 14)
+
+##  hate this! :_>)
+```
+
+## cointrol for ds - maybe makes this plot less sig
+
+-   is the silencingn allowing for degen or not??? -?? y/x vs delta dn t/y vs dela dn incl ds as model and maybe interact
+
+does y exp loss.
+controlling for time elad to greater diff in dn?
+
+Moving on \# plot dn/ds along the x and y?
+
+```{r}
+hyphy_chr_pos<-hyphy_sum_match %>% select(c(OG:sigTest,yx_readRatio,yx_readRatio_plus))
+
+ggplot(hyphy_chr_pos) + geom_point(aes(x=start_tx_pat,y=XYdS))
+
+p1<-ggplot(hyphy_chr_pos) + geom_point(aes(x = start_tx_pat,y=MLE_rhast_tx_pat))
+p2<-ggplot(hyphy_chr_pos) + geom_point(aes(x = start_tx_mat,y=MLE_rhast_tx_mat))
+plot_grid(p1,p2)
+p3<-ggplot(hyphy_chr_pos) + geom_point(aes(x = start_tx_pat,y=YX_omegaDiff))
+p4<-ggplot(hyphy_chr_pos) + geom_histogram(aes(x=YX_dNdiff)) # very concentrated around 0 - most MLE estimates of Dn/ds are the same
+p5<-ggplot(hyphy_chr_pos) + geom_histogram(aes(x=log10(yx_readRatio_plus)))
+p6<-ggplot(hyphy_chr_pos) + geom_histogram(aes(x=XYdS)) #normal ish
+p7<-ggplot(hyphy_chr_pos) + geom_histogram(aes(x=(dnds_calc_tx_mat)))
+p8<-ggplot(hyphy_chr_pos) + geom_histogram(aes(x=(dnds_calc_tx_pat)))
+p9<-ggplot(hyphy_chr_pos) + geom_histogram(aes(x=(hyphy_chr_pos))) +xlim(-10,10)
+# normalish aside from a few?
+
+p10<-ggplot(hyphy_chr_pos) + geom_histogram(aes(x=dN_rhast_tx_pat-dN_rhast_tx_mat))
+p11<-ggplot(hyphy_chr_pos) + geom_histogram(aes(x=dN_rhast_tx_pat))
+p12<-ggplot(hyphy_chr_pos) + geom_histogram(aes(x=dN_rhast_tx_mat))
+plot_grid(p4,p5,p6)
+plot_grid(p7,p8,p9)
+plot_grid(p10,p11,p12)
+
+x.norm<-hyphy_chr_pos$dN_rhast_tx_pat-hyphy_chr_pos$XYdS## drawing a 45-degree reference line
+z.norm<-(x.norm-mean(x.norm))/sd(x.norm) ## standardized data
+qqnorm(z.norm) ## drawing the QQplot##
+abline(0,1) ## drawing a 45-degree reference line
+
+
+```
+
+exp regression line
+```{r}
+hyphy_sum_match %>% mutate(my_model = predict(lm4)) %>%
+  ggplot() + 
+  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log10(yx_readRatio_plus))) +
+  #geom_abline(intercept = coef(lm4)[1],slope = coef(lm4)[2],color = "red")+
+  stat_smooth(method = "glm",family = 
+                binomial+
+  geom_vline(xintercept = log10(2),linetype = "dashed") +
+  ggtitle("dNdiff ~ y/xRatio") +
+  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+  theme_classic()
+
+
+
+```
 
