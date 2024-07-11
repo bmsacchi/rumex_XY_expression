@@ -10,7 +10,7 @@ logs/
 *.html
 .DS_Store
 .Rhistory
-hyphy/BUSTED/
+hyphy/BUSTE/
 hyphy/FitMG94/
 hyphy/muscle_alignments/
 hyphy/nuc_fastas/
