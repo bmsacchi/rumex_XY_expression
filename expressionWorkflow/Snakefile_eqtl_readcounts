@@ -27,7 +27,7 @@ rule all:
 rule rna_read_counts:
     input:
         aln= 'RNAbams/Sample/{sample}Aligned.sortedByCoord.out.bam',
-        anno= '/ohta2/Rumex/Dovetail_R_sagittatus/final_scaffolded/sag_hap1.gff'
+#        anno= '/ohta2/Rumex/Dovetail_R_sagittatus/final_scaffolded/sag_hap1.gff'
     output:
         fc = temp("readCountsRNAeQTL/{sample}.featureCounts"),
         fcsum= "readCountsRNAeQTL/{sample}.featureCounts.summary"
