@@ -1,0 +1,58 @@
+from os import path
+
+import numpy as np
+
+import pandas as pd
+
+ref = "genome/TX_fullMerge_main.fa"
+dir = "STARindex/merged_TX_noMatPAR_main/"
+mythreads = 4
+
+PREFIX = "jpop"
+
+#with open("RNA.samples_leaf.txt", "r") as file:
+#    samples = [line.strip() for line in file if line.strip()]
+
+with open("../Rumex_eQTL/RNA.samples_pollen.txt","r") as file:
+    samples = [line.strip() for line in file if line.strip()]
+
+
+rule all:
+     input:
+          #fc = expand("readCountsRNAeQTL/{sample}.featureCounts", sample = samples), 
+          mc = "readCountsRNAeQTL/rhastTXeQTLrna_pollen.txt" 
+
+rule rna_read_counts:
+    input:
+        aln= 'RNAbams/eQTL_rna/{sample}Aligned.sortedByCoord.out.bam',
+        anno= 'genome/merged_TX_noMatPARlarge_txanno.gtf'
+    output:
+        fc = temp("readCountsRNAeQTL/{sample}.featureCounts"),
+        fcsum= "readCountsRNAeQTL/{sample}.featureCounts.summary"
+    log:
+        'logs/featureCounts/{sample}.log'
+    threads: 10
+    shell:
+        """
+        featureCounts -T {threads} -p --countReadPairs -t exon -g gene_id -a {input.anno} -o {output.fc} {input.aln} &> {log}
+        """
+ 
+rule rna_merge_counts:
+    input:
+        expand("readCountsRNAeQTL/{sample}.featureCounts", sample = samples)
+    output:
+        "readCountsRNAeQTL/rhastTXeQTLrna_pollen.txt"
+    run:
+        # Merge count files.
+        frames = (pd.read_csv(fp, sep="\t", skiprows=1,
+                        index_col=list(range(6)))
+            for fp in input)
+        merged = pd.concat(frames, axis=1)
+
+        # Extract sample names.
+        merged = merged.rename(
+            columns=lambda c: path.splitext(path.basename(c))[0])
+
+        merged.to_csv(output[0], sep="\t", index=True)        
+
+
