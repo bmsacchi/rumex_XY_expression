@@ -66,23 +66,7 @@ rnaCountsClean <- rnaCounts %>%
   mutate(male_mean = maleCountsTotal/75) %>% 
   relocate(1:6,totalCountsGene, meanCounts, femaleCountsTotal, female_mean, maleCountsTotal,male_mean ) # get total gene-level counts for filtering
 
-dnaCountsClean <- dnaCounts %>% 
-  select(-"40aF",-"24fM",-"35aM") %>%
-  relocate(1:6,ends_with("F"), ends_with("M")) %>%
-  mutate(Chr = ifelse(grepl("X",Chr), "X",
-              ifelse(grepl("Y",Chr), "Y",
-              ifelse(grepl("A1",Chr), "A1",
-              ifelse(grepl("A2",Chr), "A2",
-              ifelse(grepl("A3",Chr), "A3",
-              ifelse(grepl("A4",Chr), "A4", NA))))))) %>% 
-  rowwise() %>% 
-  mutate(totalCountsGene = sum(c_across(7:155))) %>% 
-  mutate(meanCounts = totalCountsGene/149) %>%
-  mutate(femaleCountsTotal = sum(c_across(contains("F", ignore.case = FALSE)))) %>%
-  mutate(female_mean = femaleCountsTotal/74) %>%
-  mutate(maleCountsTotal = sum(c_across(contains("M", ignore.case = FALSE)))) %>%
-  mutate(male_mean = maleCountsTotal/75) %>% 
-  relocate(1:6,totalCountsGene, meanCounts, femaleCountsTotal, female_mean, maleCountsTotal,male_mean )
+
 
 
 ###
@@ -230,7 +214,7 @@ shared_bad<-intersect(badgenes$Geneid,badgenes_dna$id_tx_pat) # 400 genes
 ```{r}
 readsMatAll<-rnaCountsClean %>% column_to_rownames("Geneid") %>% select("39dF":160) # convert to matrix of all genes and inds
 
-readsMatAuto<-rnaCountsFilt %>% filter(grepl("A",Chr)) %>% # matrix with just autosomes, for generating norm factors
+readsMatAuto<-rnaCountsClean %>% filter(grepl("A",Chr)) %>% # matrix with just autosomes, for generating norm factors
    column_to_rownames("Geneid") %>% select("39dF":160) 
 
 sampleNames<- colnames(readsMatAll)
@@ -248,6 +232,7 @@ compareFactors<-data.frame(allchrFactors,autoFactors) %>% rownames_to_column("sa
 compareFactorsLong <- compareFactors %>% pivot_longer(cols = -sample, names_to = "normType", values_to = "value")
 ggplot(compareFactorsLong) + geom_point(aes(x = sample, y = value, color = normType)) + 
   theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
 #ggsave("compare_norm_factors.pdf", h = 5, w = 18)
 ## very similar
 ## use autosome factors anyway *for dc results
@@ -264,7 +249,8 @@ dds_all$sizeFactor<-autoFactors
 dds_all$sizeFactor
 
 normalized_counts<-counts(dds_all, normalized=TRUE)
-
+normcounts<-as.data.frame(normalized_counts) %>% rownames_to_column()
+write_csv(normcounts,"norm_counts_autosomefactors_eQTLleafRhast.csv")
 
 hemicounts <- as.data.frame(normalized_counts) %>% 
   rownames_to_column(var = "Geneid") %>% filter(Geneid%in%tx_yloss_nc_overlap$repGene) %>%

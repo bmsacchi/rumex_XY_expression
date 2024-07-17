@@ -18,6 +18,8 @@ Are the results as expected?
 ```{r warning=FALSE}
 library(tidyverse, quietly = TRUE)
 library(vroom, quietly = TRUE)
+library(ggpubr)
+
 ```
 
 ### read in ks dataframe
@@ -96,7 +98,7 @@ ggplot(hyphy_sum_match, aes(x = XYdS, y = yx_readRatio_plus,color = sigTest,labe
 #ggsave("plots/Ks_readRatio_hyph_filt.pdf")
 #ggsave("plots/Ks_readRatio_colors.pdf")
 
-ggplot(reads_pg_pvals_ks) + geom_point(aes(y = Ks, x = res.allele.log2FoldChange)) #+ ylim(0,0.5)  +xlim(-10,10)
+#ggplot(reads_pg_pvals_ks) + geom_point(aes(y = Ks, x = res.allele.log2FoldChange)) #+ ylim(0,0.5)  +xlim(-10,10)
 
 ks_lm<-lm(formula = log10(yx_readRatio_plus) ~ XYdS, data = filter(hyphy_sum_match,sigTest == "nonsig"))
 plot(ks_lm)
@@ -118,11 +120,6 @@ ggplot(hyphy_sum_match, aes(y = YX_omegaDiff, x = yx_readRatio_plus)) +
   stat_cor(aes(label = after_stat(rr.label)), color = "red", geom = "label") +
   theme_classic() 
 ```
-
-```{r}
-library(ggpubr)
-```
-
 ```{r}
 lma<-lm(formula = YX_dNdiff ~ yx_readRatio, data=hyphy_sum_match)
 plot(lma)
@@ -136,7 +133,7 @@ plot1<- hyphy_sum_match %>% mutate(my_model = predict(lma)) %>%
   geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = yx_readRatio)) +
   geom_abline(intercept = coef(lma)[1],slope = coef(lma)[2])+
   ggtitle("dNdiff ~ y/xRatio") +
-  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(c(label))), color = "red", geom = "label",r.digits = 4) +
   theme_classic()
 
 plot2<- hyphy_sum_match %>% mutate(my_model = predict(lmb)) %>%
@@ -163,41 +160,70 @@ library(cowplot)
 plot_grid(plot1+theme(legend.position="none"),plot2+theme(legend.position="none"),plot3+theme(legend.position="none"),ncol =3,align ="h")
 ggsave("plots/dN_lms.pdf",h = 6,w = 14)
 ```
+compare models
+```{r}
+lma<-lm(formula = YX_dNdiff ~ yx_readRatio, data=hyphy_sum_match)
+lmb <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS, data=hyphy_sum_match)
+lmc <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS + XYdS*yx_readRatio, data=hyphy_sum_match)
+
+lm4<-lm(formula = YX_dNdiff ~ log2(yx_readRatio_plus), data=hyphy_sum_match)
+lm5<-lm(formula = YX_dNdiff ~ log2(yx_readRatio_plus) + XYdS, data=hyphy_sum_match)
+lm6<-lm(formula = YX_dNdiff ~ log2(yx_readRatio_plus) + XYdS:log2(yx_readRatio_plus), data=hyphy_sum_match)
+
+## model comparison
+anova(lma,lmb)
+# small p val - lmb is better
+anova(lmb,lmc)
+# lmc is maybe bettre?
+anova(lma,lmc)
+#lmc better
+anova(lm4,lm5) # lm5
+anova(lm4,lm6) # lm6
+anova(lm5,lm6) # lm5 wins
+
+anova(lmc,lm5) # lm5 sig, almost not better?
+
+
+```
+
 
 ```{r}
-lm4<-lm(formula = YX_dNdiff ~ log10(yx_readRatio_plus), data=hyphy_sum_match)
-lm5<-lm(formula = YX_dNdiff ~ log10(yx_readRatio_plus) + XYdS, data=hyphy_sum_match)
-lm6<-lm(formula = YX_dNdiff ~ log10(yx_readRatio_plus) + XYdS:log10(yx_readRatio_plus), data=hyphy_sum_match)
+# plot4<- hyphy_sum_match %>% mutate(my_model = predict(lm4)) %>%
+#   ggplot() + 
+#   geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log10(yx_readRatio_plus))) +
+#   scale_x_continuous(trans="log10")+
+#   geom_abline(intercept = coef(lm4)[1],slope = coef(lm4)[2],color = "red")+
+#   geom_vline(xintercept = log10(2),linetype = "dashed") +
+#   ggtitle("dNdiff ~ y/xRatio") +
+#   stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+#   theme_classic()
 
-plot4<- hyphy_sum_match %>% mutate(my_model = predict(lm4)) %>%
-  ggplot() + 
-  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log10(yx_readRatio_plus))) +
-  geom_abline(intercept = coef(lm4)[1],slope = coef(lm4)[2],color = "red")+
-  geom_vline(xintercept = log10(2),linetype = "dashed") +
-  ggtitle("dNdiff ~ y/xRatio") +
-  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
-  theme_classic()
-
-plot5<- hyphy_sum_match %>% mutate(my_model = predict(lm5)) %>%
-  ggplot() + 
-  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log10(yx_readRatio_plus))) +
-  geom_abline(intercept = coef(lm5)[1],slope = coef(lm5)[2],color = "red")+
-    geom_vline(xintercept = log10(2),linetype = "dashed") +
+hyphy_sum_match %>% 
+  #mutate(my_model = predict(lm5)) %>%
+  ggplot() + geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = (yx_readRatio_plus))) +
+  #geom_abline(intercept = coef(lm5)[1],slope = coef(lm5)[2],color = "red")+
+  #geom_vline(xintercept = log10(2),linetype = "dashed") +
   ggtitle("dNdiff ~ y/xRatio + XYdS") +
-  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+  #stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(label)), color = "red", geom = "label",r.digits = 4) +
+    scale_x_continuous(trans="log2")+
   theme_classic()
+ggsave("plots/YXdNdiff_readRatio_logscale.pdf")
 
-plot6<- hyphy_sum_match %>% mutate(my_model = predict(lm6)) %>%
-  ggplot() + 
-  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log10(yx_readRatio_plus))) +
-  geom_abline(intercept = coef(lm6)[1],slope = coef(lm6)[2],color = "red")+
-    geom_vline(xintercept = log10(2),linetype = "dashed") +
-  ggtitle("dNdiff ~ y/xRatio + XYds:y/xRatio") +
-  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
-  theme_classic()
+
+
+# plot6<- hyphy_sum_match %>% mutate(my_model = predict(lm6)) %>%
+#   ggplot() + 
+#   geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log10(yx_readRatio_plus))) +
+#   geom_abline(intercept = coef(lm6)[1],slope = coef(lm6)[2],color = "red")+
+#     geom_vline(xintercept = log10(2),linetype = "dashed") +
+#   ggtitle("dNdiff ~ y/xRatio + XYds:y/xRatio") +
+#   stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+#   theme_classic()
 
 plot_grid(plot4+theme(legend.position="none"),plot5+theme(legend.position="none"),plot6+theme(legend.position="none"),ncol =3,align ="h")
-ggsave("plots/dN_lms_log10.pdf",h = 6,w = 14)
+#ggsave("plots/dN_lms_log10.pdf",h = 6,w = 14)
+
+
 
 ##  hate this! :_>)
 ```
@@ -242,8 +268,180 @@ abline(0,1) ## drawing a 45-degree reference line
 
 
 ```
+# reado 
+log tranform axes only
+```{r}
+hyphy_sum_match %>%  
+  #mutate(my_model = predict(lm5)) %>%
+  ggplot() + geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = (yx_readRatio_plus))) +
+  #geom_abline(intercept = coef(lm5)[1],slope = coef(lm5)[2],color = "red")+
+  #geom_vline(xintercept = log10(2),linetype = "dashed") +
+  ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  #stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(label)), color = "red", geom = "label",r.digits = 4) +
+    scale_x_continuous(trans="log2")+
+  theme_classic()
+ggsave("plots/YXdNdiff_readRatio_logscale.pdf")
 
-exp regression line
+```
+log transform data
+```{r}
+hyphy_sum_match %>%  
+  ggplot() + geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log2(yx_readRatio_plus))) +
+  ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  theme_classic()
+ggsave("plots/YXdNdiff_readRatio_logtransdata.pdf")
+
+```
+Add regression
+```{r}
+sorted_hyphy_sum_match <- hyphy_sum_match %>%
+  arrange(yx_readRatio)
+
+sorted_hyphy_sum_match$log2_readRatio<- log2(sorted_hyphy_sum_match$yx_readRatio_plus)
+
+lm5<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS, data=sorted_hyphy_sum_match)
+summary(lm5)
+sorted_hyphy_sum_match$fitted<-predict(lm5,sorted_hyphy_sum_match)
+sorted_hyphy_sum_match<-sorted_hyphy_sum_match%>% arrange(log2_readRatio)
+mean_XYdS<-mean(sorted_hyphy_sum_match$XYdS)
+pred_data <- data.frame(log2_readRatio = seq(min(sorted_hyphy_sum_match$log2_readRatio), 
+                                             max(sorted_hyphy_sum_match$log2_readRatio), 
+                                             length.out = 100),
+                        XYdS = mean_XYdS)
+
+pred_data$fitted <- predict(lm5, newdata = pred_data)
+pred_data$yx_readRatio_plus <- exp(pred_data$log2_readRatio)
+
+
+ggplot(sorted_hyphy_sum_match, aes(x = yx_readRatio, y = YX_dNdiff)) +
+  geom_point(alpha = 0.5) +
+  #geom_abline(intercept = coef(lm5)[1], slope = coef(lm5)[2], color = "red") +
+  geom_vline(xintercept = 2, linetype = "dashed") +
+  geom_smooth(method ="lm", formula = ) +
+  #geom_line(data = pred_data, aes(x = yx_readRatio_plus, y = fitted), color = "blue") +  # Transform back for plotting
+  scale_x_continuous(trans = "log2") +
+  ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  theme_classic()
+ggsave("plots/YXdNdiff_readRatio_logscale_lm.pdf")
+```
+
+
+Celia
+```{r}
+data2 <- sorted_hyphy_sum_match %>% select(log2_readRatio,YX_dNdiff,XYdS)
+
+lm5<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS, data=data2)
+
+data2$predicted <- predict(lm5, data=data2)
+
+```
+
+```{r}
+ggplot(data2, aes(x = log2_readRatio, y = YX_dNdiff)) +
+  geom_point(alpha = 0.5) +
+  #geom_line(data=data2, aes(x=log2_readRatio, y=predicted), color="blue")+
+  geom_abline(intercept = coef(lm5)[1], slope = coef(lm5)[2], color = "red") +
+  #geom_vline(xintercept = 2, linetype = "dashed") +
+  #geom_smooth(method ="lm", formula = ) +
+  #geom_line(data = pred_data, aes(x = yx_readRatio_plus, y = fitted), color = "blue") +  # Transform back for plotting
+  #scale_x_continuous(trans = "log2") +
+  ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  theme_classic()
+```
+
+
+```{r}
+ggplot(data2, aes(x = log2_readRatio, y = YX_dNdiff)) +
+  geom_point(alpha = 0.5,aes(color = (yx_readRatio == 0))) +
+  geom_line(data=data2, aes(x=log2_readRatio, y=predicted), color="blue")+
+  geom_abline(intercept = coef(lm5)[1], slope = coef(lm5)[2], color = "red") +
+  #geom_vline(xintercept = 2, linetype = "dashed") +
+  #geom_smooth(method ="lm", formula = ) +
+  #geom_line(data = pred_data, aes(x = yx_readRatio_plus, y = fitted), color = "blue") +  # Transform back for plotting
+  #scale_x_continuous(trans = "log2") +
+  ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  theme_classic()
+```
+
+
+```{r}
+
+lm5<-lm(formula = YX_dNdiff ~ yx_readRatio + XYdS, data=hyphy_sum_match)
+
+ggplot(hyphy_sum_match, aes(x = yx_readRatio, y = YX_dNdiff)) +
+  geom_point(alpha = 0.5) +
+  #geom_line(data=data2, aes(x=log2_readRatio, y=predicted), color="blue")+
+  geom_abline(intercept = coef(lm5)[1], slope = coef(lm5)[2], color = "red") +
+  #geom_vline(xintercept = 2, linetype = "dashed") +
+  #geom_smooth(method ="lm", formula = ) +
+  #geom_line(data = pred_data, aes(x = yx_readRatio_plus, y = fitted), color = "blue") +  # Transform back for plotting
+  scale_x_continuous(trans = "log2") #, limits=c(NA,4),breaks = c(0,0.01,0.1,1,2,3,4)) +
+  ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  theme_classic()
+```
+why is this fine!!
+
+
+```{r}
+ggplot(hyphy_sum_match)+geom_histogram(aes(x=log2(yx_readRatio_plus)),binwidth=0.1) # skew slightly better?
+
+ggplot(hyphy_sum_match)+geom_histogram(aes(x=(yx_readRatio_plus)),binwidth=0.1)
+
+hyphy_sum_match %>%  
+  mutate(my_model = predict(lm5)) %>%
+  ggplot() + geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log2(yx_readRatio_plus))) +
+  geom_abline(intercept = coef(lm5)[1],slope = coef(lm5)[2],color = "red")+
+  #geom_vline(xintercept = 2,linetype = "dashed") +
+  ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  #scale_x_continuous(trans="log2")+
+  theme_classic()
+# oh that looks weird
+
+# data not normally distributed either way
+hyphy_sum_match %>%  
+  mutate(my_model = predict(lm5)) %>%
+  ggplot() + geom_point(alpha = 0.5,aes(y = YX_omegaDiff, x = log2(yx_readRatio_plus))) +
+  geom_abline(intercept = coef(lm5)[1],slope = coef(lm5)[2],color = "red")+
+  #geom_vline(xintercept = 2,linetype = "dashed") +
+  ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  xlim(0,10) +
+  #scale_x_continuous(trans="log2")+
+  theme_classic()
+
+hyphy_sum_match %>%  
+  mutate(my_model = predict(lm5)) %>%
+  ggplot() + geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = (XYdS))) +
+  #geom_abline(intercept = coef(lm5)[1],slope = coef(lm5)[2],color = "red")+
+  #geom_vline(xintercept = 1,linetype = "dashed") +
+  #ggtitle("dNdiff ~ y/xRatio + XYdS") +
+  xlim(0,1) +
+  #scale_x_continuous(trans="log2")+
+  theme_classic()
+
+## logit
+lm_logit<-lm(formula = YX_dNdiff ~ car::logit(yx_readRatio) + XYdS, data=hyphy_sum_match)
+summary(lm_logit)
+
+hyphy_sum_match %>%  
+  mutate(my_model = predict(lm_logit)) %>%
+  ggplot() + geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = car::logit(yx_readRatio))) +
+  geom_abline(intercept = coef(lm_logit)[1],slope = coef(lm_logit)[2],color = "red")+
+  #geom_vline(xintercept = 1,linetype = "dashed") +
+  #scale_x_continuous(trans="log2")+
+  theme_classic()
+
+lm_test<-lm(formula = YX_dNdiff ~ log2(yx_readRatio+0.01) + XYdS, data=hyphy_sum_match)
+summary(lm_test)
+hyphy_sum_match %>%  
+  mutate(my_model = predict(lm_test)) %>%
+  ggplot() + geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log2(yx_readRatio+0.01))) +
+  geom_abline(intercept = coef(lm_test)[1],slope = coef(lm_test)[2],color = "red")+
+  #geom_vline(xintercept = 1,linetype = "dashed") +
+  #scale_x_continuous(trans="log2")+
+  theme_classic()
+```
+
+quad regression line
 ```{r}
 hyphy_sum_match %>% mutate(my_model = predict(lm4)) %>%
   ggplot() + 

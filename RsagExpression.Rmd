@@ -1,0 +1,91 @@
+---
+title: "dosage compensation - comparative"
+output: html_notebook
+---
+
+How does expression of sagittatus orthologous genes compare to the X-Y gametologs in Rhast?
+
+1. Run DESEQ!
+```{r}
+library(DESeq2)
+library(tidyverse)
+```
+
+## Sag deseq
+```{r}
+rnaCounts<-read_table("readCountsSagittatus/sagittatusRnaCounts.txt")
+rnaColnames<-colnames(rnaCounts)
+rnaColnamesRepaired <- gsub("(Rsg.+)Aligned.+", "\\1", rnaColnames)
+colnames(rnaCounts)<-rnaColnamesRepaired 
+
+readsMatSag<-rnaCounts %>% column_to_rownames("Geneid") %>% select(RsgL1:Rsg_1_1) # convert to matrix of all genes and inds
+
+sampleNames<- data.frame(colnames(readsMatSag)) 
+
+df_sag<-DESeqDataSetFromMatrix(readsMatSag,sampleNames, design = ~ 1)
+dds_sag <- DESeq(df_sag)
+
+sagFactors<-sizeFactors(dds_sag)
+
+# much larger scaling factor for the more newly sequenced ind (emily,  2024? vs. transcriptomic stuff from 2019/2020 ish?)
+# its ok deseq does the norm stuff, just wanted to see!
+
+normalized_counts_sag<-counts(dds_sag, normalized=TRUE)
+normalized_counts_sagdf<- as.data.frame(normalized_counts_sag) %>% rownames_to_column(var = "id_sagittatus")
+head(normalized_counts_sag)
+
+write_csv(normalized_counts_sagdf,"norm_sagCounts.csv")
+```
+
+
+```{r}
+## WAIT did I want to normalize these? What am I doing really?
+sagOrths<-read_csv("hyphy/orthsUpdatedAnnos.csv.gz")%>%
+  mutate(across(everything(),~str_replace(.,"-RA$","")))
+
+tx_yloss_nc_overlap<-read.csv("data/tx_yloss_overlapNCcomplete_loss.csv") 
+
+```
+
+```{r}
+reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_may17.csv",show_col_types =FALSE)
+
+x_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2FoldChange < 1) %>%
+  select(id_tx_mat, id_tx_pat)
+
+y_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2FoldChange > 1) %>% select(id_tx_mat,id_tx_pat)
+
+normcounts_rhast<-read_csv("norm_counts_autosomefactors_eQTLleafRhast.csv")
+normcounts_clean<-normcounts_rhast %>% 
+  rename(Geneid = "rowname") %>%
+  rowwise %>% 
+  mutate(maleMean = mean(c_across(contains("M",ignore.case = FALSE)))) %>%
+  mutate(maleVar = sd(c_across(contains("M",ignore.case = FALSE)))) %>%
+  mutate(femaleMean = mean(c_across(contains("F",ignore.case = FALSE)))) %>%
+  mutate(femaleVar = sd(c_across(contains("F",ignore.case = FALSE)))) %>%
+  mutate(totalCount =sum(c_across("39dF":"43bM"))) %>%
+  mutate(totalVar = sd(c_across("39dF":"43bM"))) %>%
+  ungroup() %>%
+  filter(totalCount >20) %>% mutate(genetype = case_when(
+   Geneid%in%x_overexpressed$id_tx_mat ~ "xOverexp",
+   Geneid%in%y_overexpressed$id_tx_mat ~ "yOverexp",
+    Geneid%in%tx_yloss_nc_overlap$repGene ~ "hemizygous", TRUE ~ "other"))
+```
+
+combine sag read counts w ortho info? and rhast counts
+```{r}
+normcounts_rhast_sag<-left_join(sagOrths,normcounts_clean ,by=c("id_tx_mat"="Geneid")) %>% 
+  left_join(.,normalized_counts_sagdf) %>% drop_na() %>% 
+  select((-"39dF":-"43bM")) %>% 
+  rowwise %>% 
+  mutate(rsagMean=mean(c_across(contains("Rsg")))) %>%
+  mutate(rsagVar=sd(c_across(contains("Rsg"))))
+
+```
+
+```{r}
+normcounts_rhast_sag %>%
+  filter(genetype == "xOverexp") %>%
+  ggplot() + geom_point(aes(y=rsagMean,x=maleMean)) + geom_smooth(method="lm",aes(y=rsagMean,x=maleMean))
+```
+
