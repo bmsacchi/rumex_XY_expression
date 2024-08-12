@@ -7,3 +7,5 @@ pyparsed_output_updated/
 all_ks_attempt1.csv.gz
 workflow/logs/
 *.csv
+relax_XY/
+relaxTrees/

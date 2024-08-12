@@ -1,0 +1,41 @@
+# running hyphy RELAX test for relaxed selection
+
+### Attempt 1
+ # test branches: Y
+ # reference branches: X
+ # is selection relaxed or increased on Y genes
+ # question 2: is this more likely/common for genes with decreased Y/X expression?
+
+# same alignment output from Snakefile_codonAlignment
+# need to relabel test and reference tree branches first ugh!!!
+#
+from os import path
+import pandas as pd
+
+# some of the trees from Snakemake_labeltrees failed (about 460) because either one or both of branches to label was missing.
+
+with open("labeledtrees.txt","r") as file:
+     orthogroups = [line.strip() for line in file if line.strip()]
+
+## rule all:
+
+rule all:
+    input: 
+       relaxout = expand("../relax_XY/{sample}_relax.json", sample = orthogroups),
+
+rule relax:
+    input:
+       treefile = "../relaxTrees/{sample}.labeled.treefile",
+       msa = "../muscle_alignments_updated/{sample}.msa"
+    output: 
+       "../relax_XY/{sample}_relax.json"
+    conda: 
+       "hyphy"
+    resources:
+       tmpdir = "/ohta2/bianca.sacchi/tmp"
+    shell:
+       """
+       hyphy relax --alignment {input.msa} --tree {input.treefile} --test test \
+       --reference reference --output {output}
+       """
+    

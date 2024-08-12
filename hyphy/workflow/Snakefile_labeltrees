@@ -1,0 +1,61 @@
+# running hyphy RELAX test for relaxed selection
+
+### Attempt 1
+ # test branches: Y
+ # reference branches: X
+ # is selection relaxed or increased on Y genes
+ # question 2: is this more likely/common for genes with decreased Y/X expression?
+
+# same alignment output from Snakefile_codonAlignment
+# need to relabel test and reference tree branches first ugh!!!
+#
+from os import path
+import pandas as pd
+
+with open("treefiles.txt","r") as file:
+     orthogroups = [line.strip() for line in file if line.strip()]
+
+## rule all:
+
+rule all:
+    input: 
+       msa = expand("../muscle_alignments_updated/{sample}.msa", sample = orthogroups),
+       tree = expand("../muscle_alignments_updated/{sample}.msa.treefile", sample = orthogroups),
+       relabel = expand("../relaxTrees/{sample}.labeled.treefile", sample = orthogroups),
+       #relaxout = expand("../relax_XY/{sample}.json", sample = orthogroups),
+
+rule relabelY:
+    input: 
+        treefile = "../muscle_alignments_updated/{sample}.msa.treefile",
+    output: 
+        temp("../relaxTrees/{sample}.Y.treefile")
+    conda:
+        "hyphy"
+    resources:
+       tmpdir = "/ohta2/bianca.sacchi/tmp"
+    shell:
+        """
+        hyphy ../../../bin/hyphy-analyses/LabelTrees/label-tree.bf --tree {input}  \
+        --regexp TX_paternal_*  --label test  --output {output}
+        """
+
+rule relabelX:
+    input: 
+        rules.relabelY.output
+    output:
+        treefile = "../relaxTrees/{sample}.labeled.treefile"
+    conda:
+        "hyphy"
+    shell: 
+        """
+        hyphy ../../../bin/hyphy-analyses/LabelTrees/label-tree.bf --tree {input}  \
+        --regexp TX_maternal_*  --label reference --output {output}
+        """
+
+
+#rule relax:
+#    input: 
+#    output:
+ #   conda: 
+ #      "hyphy"
+    
