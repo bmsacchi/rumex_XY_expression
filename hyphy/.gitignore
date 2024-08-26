@@ -9,3 +9,7 @@ workflow/logs/
 *.csv
 relax_XY/
 relaxTrees/
+pyparseRelax/
+FitMG94_local_updated/
+workflow/26fMLD_sortMarkDups.coverage.txt
+workflow/64aFLD_sortMarkDups.bam.coverage.txt

@@ -4,39 +4,40 @@ import pandas as pd
 import os.path as path
 import gzip
 
-with open ("updated_json.txt","r") as file:
+#with open ("updated_json.txt","r") as file:
+with open("relaxJson.txt","r") as file:
     samples = [line.strip() for line in file if line.strip()]
 
 rule all:
     input:
-       parsed = expand("../pyparsed_output_updated/{sample}.txt", sample = samples),
-       outcsv = "../all_ks_updated.csv.gz"
+       parsed = expand("../pyparseRelax/{sample}.txt", sample = samples),
+       outcsv = "../RELAX_xy.csv.gz"
 
 rule json_parse:
     input:
-        "../FitMG94_local_updated/{sample}.json"
+        "../relax_XY/{sample}_relax.json"
     output:
-        "../pyparsed_output_updated/{sample}.txt"
+        "../pyparseRelax/{sample}.txt"
     resources:
         tmpdir = "/ohta2/bianca.sacchi/tmp"
     script:
-        "parse_json.py"
+        "parse_jsonRelax.py"
 
 
 #def list_txt_files(directory):
 #    return [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.txt')]
 
 # Directory where .txt files are located (adjust as per your directory structure)
-txt_files_directory = "../pyparsed_output_updated"
+#txt_files_directory = "../pyparseRelax"
 
 # List of .txt files in the directory
 #txt_files = list_txt_files(txt_files_directory)
 
 rule concat:
     input: 
-        expand("../pyparsed_output_updated/{index}.txt", index=samples)
+        expand("../pyparseRelax/{index}.txt", index=samples)
     output:
-        temp("../all_ks_updated.csv")
+        temp("../RELAX_xy.csv")
     run:
         dfs = [pd.read_csv(file) for file in input]
         concatenated_df = pd.concat(dfs, ignore_index = True)
@@ -46,6 +47,6 @@ rule gzip:
     input:
         rules.concat.output
     output:
-        "../all_ks_updated.csv.gz"
+        "../RELAX_xy.csv.gz"
     shell:
         "gzip {input}"
