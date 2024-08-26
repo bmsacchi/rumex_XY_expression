@@ -250,8 +250,8 @@ dds_all$sizeFactor
 
 normalized_counts<-counts(dds_all, normalized=TRUE)
 normcounts<-as.data.frame(normalized_counts) %>% rownames_to_column()
-write_csv(normcounts,"norm_counts_autosomefactors_eQTLleafRhast.csv")
-
+#write_csv(normcounts,"norm_counts_autosomefactors_eQTLleafRhast.csv")
+normcounts<-read_csv("data/norm_counts_autosomefactors_eQTLleafRhast.csv.gz")
 hemicounts <- as.data.frame(normalized_counts) %>% 
   rownames_to_column(var = "Geneid") %>% filter(Geneid%in%tx_yloss_nc_overlap$repGene) %>%
   rowwise %>% 
@@ -446,6 +446,7 @@ reads_pg_pvals<-inner_join(reads_pg, pvals_genes, by =c("pairID" ="res.allele.ro
   relocate(c(pairID:male_mean.mat, meanCounts.pat:male_mean.pat, res.allele.padj:sigTest))
 
 #write_csv(reads_pg_pvals, "rna_ase_results_eqtl_may17.csv")
+reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_may17.csv")
 head(reads_pg_pvals)
 ```
 
@@ -455,12 +456,12 @@ ggplot(reads_pg_pvals) +
   geom_point(aes(x=start_tx_pat, 
                  y = 2^res.allele.log2FoldChange/(1+2^res.allele.log2FoldChange), size = res.allele.lfcSE,
                  color = sigTest),alpha = 0.5) 
-ggsave("lfc_ase_log2_1.pdf")
+#ggsave("lfc_ase_log2_1.pdf")
 ggplot(reads_pg_pvals) +
   geom_point(aes(y=(maleCountsTotal.pat+maleCountsTotal.mat)/(femaleCountsTotal.mat+femaleCountsTotal.pat), 
                  x = maleCountsTotal.pat/(maleCountsTotal.mat),
                  color = sigTest)) +ylim(0,1) + xlim(0,1) +geom_abline(intercept = 0.5, slope = 0.5)
-ggsave("DC_expected_counts_Lfc1_axis.pdf")
+#ggsave("DC_expected_counts_Lfc1_axis.pdf")
 
 # fraction of genes ow or ue on Y depending on stringency
 # more stringent lgo2fc2 change, more reduced Y exp, but fewer sig sites
@@ -471,19 +472,30 @@ ggsave("DC_expected_counts_Lfc1_axis.pdf")
 #df<- reads_pg_pvals %>% mutate(readratio = (male_mean.pat/male_mean.mat))
 
 #ggplot(df)+ geom_histogram(aes(x = (readratio), color = sigTest)) #+xlim(0,1)
+reads_pg_pvals2 <- reads_pg_pvals %>%   mutate(sigLFC = 
+           case_when(res.allele.padj < 0.1 & abs(res.allele.log2FoldChange) > 1 ~ "True",
+                     TRUE ~"False" ))
+reads_pg_pvals2$sigLFC<-factor(reads_pg_pvals2$sigLFC, levels = c("True","False"))
+mycolors<-RColorBrewer::brewer.pal(2,"Set1")[2:3]
 
-
-ggplot(reads_pg_pvals,aes(x=male_mean.mat,y=male_mean.pat, color = sigTest)) + geom_point(aes(size = res.allele.lfcSE),alpha =0.5) +
+ggplot(reads_pg_pvals2,aes(x=male_mean.mat,y=male_mean.pat, color = sigLFC)) + geom_point(aes(size = res.allele.lfcSE),alpha =0.60) +
     geom_abline(slope = 1, intercept = 0, linetype=1) +
   theme_bw()+
   geom_smooth(method ="lm") +
-  xlab("mean exp of X gametolog") +
-  ylab("mean exp of Y gametolog") +
- scale_x_continuous(transform = "log2") +
-  scale_y_continuous(transform = "log2")
+  xlab("mean expression of X\n gametolog in males") +
+  ylab("mean expression of Y\n gametolog in males") +
+  scale_x_continuous(transform = "log2",limits = c(NA,4000),breaks = c(0.0625,2,64,2048)) +
+  scale_y_continuous(transform = "log2",limits = c(NA,4000),breaks = c(0.0625,2,64,2048)) +
+  labs(color= "p-val < 0.1 & |log2FC| >1 ", size = "log2FC std. error") +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16),
+        legend.text = element_text(size =12),
+        legend.title = element_text(size =12)) 
+  
+ #scale_color_manual(values = mycolors)
   #ggsave("gametolog_expression_lfc1_fdr0.1.pdf")
 #ggsave("gametolog_expression_lfc1_fdr0.1_lfcSE.pdf")
-ggsave("gametolog_expression_lfc1_fdr0.1_lfcSE_logscale.pdf",h =5, w=7)
+ggsave("plots/gametolog_expression_lfc1_fdr0.1_lfcSE_logscale.pdf",h =6, w=10)
 
 
 ```
@@ -584,8 +596,9 @@ x_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2F
 y_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2FoldChange > 1) %>% select(id_tx_mat,id_tx_pat)
 
 
-normcounts_clean<-as.data.frame(normalized_counts) %>% 
-  rownames_to_column(var = "Geneid") %>%
+normcounts_clean<-#as.data.frame(normalized_counts) %>% 
+  normcounts %>%
+  dplyr::rename("Geneid" ="rowname") %>%
   rowwise %>% 
   mutate(maleMean = mean(c_across(contains("M",ignore.case = FALSE)))) %>%
   mutate(maleVar = sd(c_across(contains("M",ignore.case = FALSE)))) %>%
@@ -599,7 +612,7 @@ dc_combo <- normcounts_clean %>% mutate(genetype = case_when(
    #Geneid%in%completely_silenced$id_tx_mat ~ "completeYsilenced",
     Geneid%in%x_overexpressed$id_tx_mat ~ "xOverexp",
     #Geneid%in%y_overexpressed$id_tx_mat ~ "yOverexp",
-    Geneid%in%hemicounts$Geneid ~ "hemizygous", TRUE ~ "other")) %>% 
+    Geneid%in%tx_yloss_nc_overlap$repGene ~ "hemizygous", TRUE ~ "other")) %>% 
     filter(genetype != "other")
 
 
@@ -609,11 +622,16 @@ ggplot(dc_combo, aes(x = femaleMean, y = maleMean, color = genetype)) +
   geom_errorbarh(aes(xmin = femaleMean-femaleVar, xmax = femaleMean+femaleVar, color = genetype)) +
   geom_smooth(method="lm", fullrange = TRUE) +
   geom_abline(slope = 1, intercept = 0, linetype=1) + 
-  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +
+  theme_bw() +
   xlab("Average female expression") +
-  ylab("Average male expression") 
-
-ggsave("combined_dc_plot_hemi_ysilence.jpg", h = 6, w =8)
+  ylab("Average male expression") +
+  labs(color= NULL) +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16),
+        legend.text= element_text(size =12)) +
+  scale_color_discrete(labels = c("hemizygous"="Hemizygous", "xOverexp" = "Partial or complete\n Y silencing"))
+ggsave("plots/combined_dc_plot_hemi_ysilence.jpg", h = 6, w =9)
 ```
 
 
