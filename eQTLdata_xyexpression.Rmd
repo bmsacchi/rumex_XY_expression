@@ -47,30 +47,50 @@ setdiff(rnaColnamesRepaired,dnaColnamesRepaired)
 # remove samples "67eF" "14bF" "45aF"
 # also need to remove 40aF and 24fM 
 # 40aF< and 35aM have aberrant coverage patterns
-
-rnaCountsClean <- rnaCounts %>% 
-  select(-"67eF",-"14bF",-"45aF",-"40aF",-"24fM",-"35aM") %>% # remove samples not in DNA and weird ones
-  relocate(1:6,ends_with("F"), ends_with("M")) %>% # sort columns for ease
-  mutate(Chr = ifelse(grepl("X",Chr), "X", # relabel Chrs for convenience
-              ifelse(grepl("Y",Chr), "Y",
-              ifelse(grepl("A1",Chr), "A1",
-              ifelse(grepl("A2",Chr), "A2",
-              ifelse(grepl("A3",Chr), "A3",
-              ifelse(grepl("A4",Chr), "A4", NA))))))) %>%
-  rowwise() %>% 
-  mutate(totalCountsGene = sum(c_across(7:155))) %>% 
-  mutate(meanCounts = totalCountsGene/149) %>%
-  mutate(femaleCountsTotal = sum(c_across(contains("F", ignore.case = FALSE)))) %>%
-  mutate(female_mean = femaleCountsTotal/74) %>%
-  mutate(maleCountsTotal = sum(c_across(contains("M", ignore.case = FALSE)))) %>%
-  mutate(male_mean = maleCountsTotal/75) %>% 
-  relocate(1:6,totalCountsGene, meanCounts, femaleCountsTotal, female_mean, maleCountsTotal,male_mean ) # get total gene-level counts for filtering
+```
 
 
+```{r}
 
+```
 
-###
-#make it a function
+```{r}
+clean_counts <- function(data, columns_to_remove) {
+  # Calculate number of columns that contain "F" and "M"
+  num_female_cols <- ncol(select(data, contains("F", ignore.case = FALSE)))
+  num_male_cols <- ncol(select(data, contains("M", ignore.case = FALSE)))
+  num_cols<-num_female_cols+num_male_cols
+
+  data %>%
+    select(-all_of(columns_to_remove)) %>%  # Remove specified columns
+    relocate(1:6, ends_with("F"), ends_with("M")) %>%  # Sort columns
+    mutate(Chr = case_when(  # Relabel chromosomes
+      grepl("X", Chr) ~ "X",
+      grepl("Y", Chr) ~ "Y",
+      grepl("A1", Chr) ~ "A1",
+      grepl("A2", Chr) ~ "A2",
+      grepl("A3", Chr) ~ "A3",
+      grepl("A4", Chr) ~ "A4",
+      TRUE ~ NA_character_
+    )) %>%
+    rowwise() %>%
+    mutate( # Calculate mean counts
+      femaleCountsTotal = sum(c_across(contains("F", ignore.case = FALSE))),  # Calculate total female counts
+      female_mean = (femaleCountsTotal / num_female_cols),  # Calculate mean female counts dynamically
+      maleCountsTotal = sum(c_across(contains("M", ignore.case = FALSE))),  # Calculate total male counts
+      male_mean = (maleCountsTotal / num_male_cols),  # Calculate mean male counts dynamically
+    totalCountsGene = (femaleCountsTotal+maleCountsTotal),
+    meanCounts = totalCountsGene / num_cols) %>%
+    relocate(1:6, totalCountsGene, meanCounts, femaleCountsTotal, female_mean, maleCountsTotal, male_mean)  # Reorder columns
+}
+#test_coutns<-clean_counts(rnaCounts,rnacolsremove)
+```
+
+```{r}
+rnacolsremove<-c("67eF","14bF","45aF","40aF","24fM","35aM")
+dnacolsremove<-c("40aF","24fM","35aM")
+rnaCountsClean <- clean_counts(rnaCounts,rnacolsremove) # get total gene-level counts for filtering
+dnaCountsClean <- clean_counts(dnaCounts,dnacolsremove)
 ```
 
 
@@ -80,7 +100,7 @@ setdiff(colnames(rnaCountsClean),colnames(dnaCountsClean))
 # ok all g
 #rnaCountsWide<-rnaCountsClean %>% pivot_longer(names_to = )
 
-dnaSamplenamesClean<-colnames(select(dnaCountsClean,-1:-7))
+dnaSamplenamesClean<-colnames(select(dnaCountsClean,-1:-12))
 sampleInfo<-as_tibble_col(dnaSamplenamesClean, column_name="Sample") %>% mutate(.,Sex = if_else(grepl("*M", Sample),"M", "F"))
 
 ```
@@ -92,7 +112,6 @@ This will also help eliminate genes where there's weird amounts of mapping on Y 
 ### load X-Y gametologs
 ```{r include=FALSE}
 pgMatOrths<-read_csv("data/pgMatOrths.csv")
-
 ```
 ### DNA read ratios
 
@@ -109,7 +128,6 @@ reads_pg_dna<-left_join(pgMatOrths,eqtl_x_dna, by = c("id_tx_mat"="Geneid")) %>%
   mutate(totalCountAll=(totalCountsGene.mat+totalCountsGene.pat)) %>%
   ungroup() %>% filter(totalCountAll >20) %>%
   relocate(c(pairID:male_mean.mat, totalCountsGene.pat:male_mean.pat,totalCountAll)) 
-
 
 
 colnames(reads_pg_dna)
@@ -239,6 +257,7 @@ ggplot(compareFactorsLong) + geom_point(aes(x = sample, y = value, color = normT
 
 
 ```
+
 ```{r}
 # load set of hemizygous genes
 tx_yloss_nc_overlap<-read.csv("data/tx_yloss_overlapNCcomplete_loss.csv")

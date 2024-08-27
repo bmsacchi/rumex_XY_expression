@@ -26,6 +26,8 @@ onlysyn<-mat_synorths_raw %>% filter(!(pgID%in%nsorths$pgID)) %>%
 hasanortho<-onlysyn %>% 
   filter((tx_mat!=""|tx_pat!="")&Rsal!="")
 
+# !="" means "not absent". =""means "gene absent"
+# this stressed me out for a minute!
 notlost<-onlysyn %>% filter((tx_mat!="" & tx_pat!="" & Rsal!=""))
 
 ## hemizygous?
@@ -36,7 +38,21 @@ tx_mat_loss<-onlysyn %>% filter(tx_mat!="" & tx_pat=="" & Rsal!="")
 summary_loss<- tx_mat_loss %>% group_by(chr) %>% summarise(n_loss = n()) #272 hemizygous
 print(summary_loss)
 tx_yloss<- filter(tx_mat_loss) %>% filter(chr == "X") #376
+genelist_tx_mat<-tx_yloss %>% dplyr::select(tx_mat)
+
+write.table(genelist_tx_mat,"data/genelist_tx_mat.txt",quote=FALSE,sep="\t",row.names=F)
+
+
 ```
+
+```{r}
+write_csv()
+```
+
+```{bash}
+echo "hello"
+```
+
 ## upload the completely lost genes from NC
 ```{r}
 nc_complete_loss<-read.csv("../rumex_pangenome_annotation/complete_yloss_Sept2023.csv")
