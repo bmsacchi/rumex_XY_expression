@@ -38,10 +38,9 @@ tx_mat_loss<-onlysyn %>% filter(tx_mat!="" & tx_pat=="" & Rsal!="")
 summary_loss<- tx_mat_loss %>% group_by(chr) %>% summarise(n_loss = n()) #272 hemizygous
 print(summary_loss)
 tx_yloss<- filter(tx_mat_loss) %>% filter(chr == "X") #376
-genelist_tx_mat<-tx_yloss %>% dplyr::select(tx_mat) %>%
-  mutate(tx_mat = str_c(tx_mat, "-RA"))
+genelist_tx_mat<-tx_yloss %>% dplyr::select(tx_mat) 
 
-write.table(genelist_tx_mat,"data/genelist_tx_mat.txt",quote=FALSE,sep="\t",row.names=F)
+write.table(genelist_tx_mat,"data/genelist_tx_mat.txt",quote=FALSE,sep="\t",row.names=F,col.names = F)
 
 
 ```
