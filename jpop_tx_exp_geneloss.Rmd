@@ -70,10 +70,19 @@ tophit_geneonly<- blast_yloss %>% group_by(qseqid) %>%
 tophit_partial<- tophit_geneonly %>% filter(alignedpropn <= 0.5) ## 195 partially lost
 tophit_notloss<-tophit_geneonly %>% filter(alignedpropn > 0.5) ## only 33 genes "not lost"
 ## 376 lost before blast filtering, putatively
+
+
 updated_genelist <- genelist_tx_mat %>% filter(!tx_mat%in%tophit_notloss$qseqid)
 
-write_csv(overlap_yloss, "data/tx_yloss_blastconfirmed_Aug2024.csv")
+write_csv(updated_genelist, "data/tx_yloss_blastconfirmed_Aug2024.csv")
 
+complete_yloss<- genelist_tx_mat %>% filter(!tx_mat%in%tophit_notloss$qseqid &
+                                              !tx_mat%in%tophit_partial$qseqid)
+write_csv(complete_yloss, "data/tx_yloss_blastconfirmed_complete_Aug2024.csv")
+
+partial_yloss<-genelist_tx_mat %>% filter(!tx_mat%in%tophit_notloss$qseqid &
+                                              tx_mat%in%tophit_partial$qseqid)
+write_csv(partial_yloss, "data/tx_yloss_blastconfirmed_partial_Aug2024.csv")
 ```
 
 
