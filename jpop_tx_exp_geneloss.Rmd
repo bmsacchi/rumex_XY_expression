@@ -44,17 +44,42 @@ write.table(genelist_tx_mat,"data/genelist_tx_mat.txt",quote=FALSE,sep="\t",row.
 
 
 ```
+blast was performed - see blast_yloss_patgenome.sh
 
 ```{r}
-write_csv()
+blast_yloss <- read_tsv("data/blast_pat_genome.tsv",
+                    col_names = c("qseqid", "sseqid", "pident", "length", 
+                                  "mismatch", "gapopen", "qstart", "qend", 
+                                  "qlen", "sstart", "send", "slen", "evalue", 
+                                  "bitscore", "score"))
+
+#blast_pos<-full_join(blast_yloss,mat_synorths_raw,by=c("qseqid"="tx_mat"))  %>% add_count(qseqid) 
+### which genes, out of any, are no hits in hap2 genome
+#hits_x<- blast_yloss %>% filter(sseqid =="Y")
+hits<-blast_yloss %>% dplyr::select(qseqid) %>% distinct()
+nohit<- anti_join(genelist_tx_mat,hits, by = c("tx_mat"="qseqid"))
+tophit_geneonly<- blast_yloss %>% group_by(qseqid) %>%
+  mutate(the_rank  = rank(-pident, ties.method = "random")) %>%
+  filter(the_rank == 1) %>%
+  dplyr::select(-the_rank) %>% mutate(alignedpropn = length/qlen)
+
+```
+# complete and partial loss a la NC paper
+```{r}
+
+tophit_partial<- tophit_geneonly %>% filter(alignedpropn <= 0.5) ## 195 partially lost
+tophit_notloss<-tophit_geneonly %>% filter(alignedpropn > 0.5) ## only 33 genes "not lost"
+## 376 lost before blast filtering, putatively
+updated_genelist <- genelist_tx_mat %>% filter(!tx_mat%in%tophit_notloss$qseqid)
+
+write_csv(overlap_yloss, "data/tx_yloss_blastconfirmed_Aug2024.csv")
+
 ```
 
-```{bash}
-echo "hello"
-```
 
 ## upload the completely lost genes from NC
 ```{r}
+# 167 genes lost in NC
 nc_complete_loss<-read.csv("../rumex_pangenome_annotation/complete_yloss_Sept2023.csv")
 
 head(nc_complete_loss)
@@ -65,7 +90,7 @@ dim(ncGenesToKeep)
 overlap_yloss<-tx_yloss %>% filter(nc_hap1%in%ncGenesToKeep$repGene)
 #125 genes overlapping loss in tx and complete loss in nc
 
-## all genes come on don't be lazy
+## all genes
 allncGenesToKeep<-nc_complete_loss %>% select(repGene)
 
 overlapp_all_loss<-tx_mat_loss %>% filter(nc_hap1%in%allncGenesToKeep$repGene)
