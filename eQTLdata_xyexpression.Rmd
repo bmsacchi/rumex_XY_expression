@@ -161,6 +161,7 @@ ggsave("maleMeanCounts_lim200_hist.pdf")
 ggplot(dnaCountsClean, aes(male_mean))+geom_histogram() + facet_wrap(~ Chr)
 ggsave("maleMeanCounts_nolim_hist.pdf")
 ```
+
 ```{r}
 ase_data_dna<-reads_pg_dna_noPAR %>% select(c(pairID,contains("M", ignore.case = FALSE ))) %>% column_to_rownames(var ="pairID")
 ## ase matrix

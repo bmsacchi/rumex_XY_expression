@@ -5,7 +5,7 @@ output: html_notebook
 
 ```{r message=TRUE, warning=FALSE}
 library(tidyverse, quietly = TRUE)
-library(vroom, quietly =TRUE)
+library(vroom, quietly = TRUE)
 library(data.table, quietly = TRUE)
 ```
 
@@ -40,7 +40,7 @@ print(summary_loss)
 tx_yloss<- filter(tx_mat_loss) %>% filter(chr == "X") #376
 genelist_tx_mat<-tx_yloss %>% dplyr::select(tx_mat) 
 
-write.table(genelist_tx_mat,"data/genelist_tx_mat.txt",quote=FALSE,sep="\t",row.names=F,col.names = F)
+#write.table(genelist_tx_mat,"data/genelist_tx_mat.txt",quote=FALSE,sep="\t",row.names=F,col.names = F)
 
 
 ```
@@ -56,9 +56,11 @@ blast_yloss <- read_tsv("data/blast_pat_genome.tsv",
 #blast_pos<-full_join(blast_yloss,mat_synorths_raw,by=c("qseqid"="tx_mat"))  %>% add_count(qseqid) 
 ### which genes, out of any, are no hits in hap2 genome
 #hits_x<- blast_yloss %>% filter(sseqid =="Y")
-hits<-blast_yloss %>% dplyr::select(qseqid) %>% distinct()
-nohit<- anti_join(genelist_tx_mat,hits, by = c("tx_mat"="qseqid"))
-tophit_geneonly<- blast_yloss %>% group_by(qseqid) %>%
+
+## filter by hits matching to Y only!!!!!!
+hits<-blast_yloss %>% filter(sseqid == "Y") #%>% dplyr::select(qseqid) %>% distinct() # distinct is fully redundant here
+nohit<- anti_join(genelist_tx_mat,hits, by = c("tx_mat"="qseqid")) ## 222 with no hit
+tophit_geneonly<- hits %>% group_by(qseqid) %>%
   mutate(the_rank  = rank(-pident, ties.method = "random")) %>%
   filter(the_rank == 1) %>%
   dplyr::select(-the_rank) %>% mutate(alignedpropn = length/qlen)
@@ -67,8 +69,8 @@ tophit_geneonly<- blast_yloss %>% group_by(qseqid) %>%
 # complete and partial loss a la NC paper
 ```{r}
 
-tophit_partial<- tophit_geneonly %>% filter(alignedpropn <= 0.5) ## 195 partially lost
-tophit_notloss<-tophit_geneonly %>% filter(alignedpropn > 0.5) ## only 33 genes "not lost"
+tophit_partial<- tophit_geneonly %>% filter(alignedpropn <= 0.5) ## 130 partially lost
+tophit_notloss<-tophit_geneonly %>% filter(alignedpropn > 0.5)  ## only 24 genes "not lost"
 ## 376 lost before blast filtering, putatively
 
 
@@ -102,8 +104,11 @@ overlap_yloss<-tx_yloss %>% filter(nc_hap1%in%ncGenesToKeep$repGene)
 ## all genes
 allncGenesToKeep<-nc_complete_loss %>% select(repGene)
 
-overlapp_all_loss<-tx_mat_loss %>% filter(nc_hap1%in%allncGenesToKeep$repGene)
+overlap_all_loss<-tx_mat_loss %>% filter(nc_hap1%in%allncGenesToKeep$repGene)
 # nvm basically the same, just one diff
+
+#overlap with blast loss:
+
 ```
 
 ```{r}
