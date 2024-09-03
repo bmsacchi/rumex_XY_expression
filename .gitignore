@@ -25,12 +25,11 @@ rna_ase_results_eqtl.csv
 67935_67937.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.ks.txt
 dna_ase_results_eqtl_noPAR.csv
 =======
-
 >>>>>>> 2549a04440239cfbcb816158897053c48a88733b
 hyphy/FitMG94_local/
 coveragePlots/
-
 data/*.fa*
 *.nhr
 *.nin
 *.nsq
+rna_ase_results_eqtl_sept3.csv

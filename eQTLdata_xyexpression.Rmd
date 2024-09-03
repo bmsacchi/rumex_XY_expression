@@ -51,10 +51,6 @@ setdiff(rnaColnamesRepaired,dnaColnamesRepaired)
 
 
 ```{r}
-
-```
-
-```{r}
 clean_counts <- function(data, columns_to_remove) {
   # Calculate number of columns that contain "F" and "M"
   num_female_cols <- ncol(select(data, contains("F", ignore.case = FALSE)))
@@ -89,8 +85,11 @@ clean_counts <- function(data, columns_to_remove) {
 ```{r}
 rnacolsremove<-c("67eF","14bF","45aF","40aF","24fM","35aM")
 dnacolsremove<-c("40aF","24fM","35aM")
-rnaCountsClean <- clean_counts(rnaCounts,rnacolsremove) # get total gene-level counts for filtering
+rnaCountsClean <- clean_counts(rnaCounts,rnacolsremove)
+write_csv(rnaCountsClean, "data/rnaCountsClean.csv")# get total gene-level counts for filtering
 dnaCountsClean <- clean_counts(dnaCounts,dnacolsremove)
+write_csv(dnaCountsClean, "data/dnaCountsClean.csv")# get total gene-level counts for filtering
+
 ```
 
 
@@ -148,68 +147,66 @@ ggplot(reads_pg_dna_noPAR,aes(x=male_mean.mat,y=male_mean.pat)) + geom_point() +
   ylab("mean dna read counts of Y gametolog") 
 ## same basically. but good to remove.
 
-```
-### explore DNA output
-```{r}
-ggplot(dnaCountsClean, aes(meanCounts))+geom_histogram() + facet_wrap(~ Chr)
-ggplot(dnaCountsClean, aes(female_mean))+geom_histogram() + facet_wrap(~ Chr)
-ggsave("femaleMeanCounts_nolim_hist.pdf")
-ggplot(dnaCountsClean, aes(female_mean))+geom_histogram() + xlim(0,200)+ facet_wrap(~ Chr)
-ggsave("femaleMeanCounts_lim200_hist.pdf")
-ggplot(dnaCountsClean, aes(male_mean))+geom_histogram() + xlim(0,200)+ facet_wrap(~ Chr)
-ggsave("maleMeanCounts_lim200_hist.pdf")
-ggplot(dnaCountsClean, aes(male_mean))+geom_histogram() + facet_wrap(~ Chr)
-ggsave("maleMeanCounts_nolim_hist.pdf")
+## remove these
+badgenes_dna<-reads_pg_dna_noPAR %>% 
+  filter(female_mean.pat >= 20 & chr_tx_pat =="Y") %>% select(pairID,id_tx_mat,id_tx_pat)
+
+goodgenes_dna <-reads_pg_dna_noPAR %>% filter(female_mean.pat < 20 & chr_tx_pat =="Y")
 ```
 
+
 ```{r}
-ase_data_dna<-reads_pg_dna_noPAR %>% select(c(pairID,contains("M", ignore.case = FALSE ))) %>% column_to_rownames(var ="pairID")
+ase_data_dna<-reads_pg_dna_noPAR %>% 
+  filter(pairID%nin%badgenes_dna$pairID) %>% # remove bad genes 1450 down to 647 :((((((()))))))
+  select(c(pairID,contains("M", ignore.case = FALSE ))) %>% column_to_rownames(var ="pairID")
 ## ase matrix
-IDs<-colnames(ase_data_dna)
-sorted_col_names <- mixedsort(IDs)
-ase_data_dna <- ase_data_dna[, sorted_col_names]
+IDs<-colnames(ase_data_dna) # colnames
+sorted_col_names <- mixedsort(IDs) # sort colnames
+ase_data_dna <- ase_data_dna[, sorted_col_names] # turn to matrix
 #colnames(ase_data)
 # yay!!
-sample<-str_remove(sorted_col_names,"..at") # tm1 tm1 etc.
-allele<-str_extract(sorted_col_names,".at$") # mat pat mat pat
+sample<-str_remove(sorted_col_names,"..at") # tm1 tm1 etc. remove suffices
+allele<-str_extract(sorted_col_names,".at$") # mat pat mat pat extract suffices
 
-colInfo<-data.frame(sorted_col_names,sample,allele) # wooo
+colInfo<-data.frame(sorted_col_names,sample,allele) # create column info df
 
-ase_matrix_dna<-as.matrix(ase_data_dna)
-design<- ~sample+allele
+ase_matrix_dna<-as.matrix(ase_data_dna) # convert to matrix
+design<- ~sample+allele # design formula
 
-m <- 75
+m <- 75 # number of samples
 
-dds <- DESeqDataSetFromMatrix(ase_data_dna, colInfo, design)
-sizeFactors(dds) <- rep(1, 2*m)
-dds <- DESeq(dds, fitType="local")
+dds <- DESeqDataSetFromMatrix(ase_data_dna, colInfo, design) # create deseq object
+sizeFactors(dds) <- rep(1, 2*m) # set size factors to unity
+dds <- DESeq(dds, fitType="local") # fit model
 
-resultsNames(dds)
+resultsNames(dds) # get results names
 
-res.allele <- results(dds, name="allele_pat_vs_mat")
-head(res.allele$log2FoldChange)
-
-adj_pvals_dna<-res.allele$padj
+res.allele <- results(dds, name="allele_pat_vs_mat") # get results
+head(res.allele$log2FoldChange) # check log2foldchange
 
 
-pvals_genes_dna<-data.frame(res.allele@rownames,res.allele$padj,res.allele$log2FoldChange,res.allele$lfcSE) #%>%
-reads_pg_pvals_dna<-inner_join(reads_pg_dna_noPAR, pvals_genes_dna, by =c("pairID" ="res.allele.rownames")) %>%
+adj_pvals_dna<-res.allele$padj # get adjusted pvals
+
+
+pvals_genes_dna<-data.frame(res.allele@rownames,res.allele$padj,res.allele$log2FoldChange,res.allele$lfcSE) # create df with pvals
+reads_pg_pvals_dna<-inner_join(reads_pg_dna_noPAR, pvals_genes_dna, by =c("pairID" ="res.allele.rownames")) %>% # join with read data
   mutate(sigTest = 
            case_when((res.allele.padj < 0.1) ~ "sig",
                      TRUE ~"nonsig" )) %>% relocate(c(pairID:totalCountAll,res.allele.padj:sigTest))
-write_csv(reads_pg_pvals_dna, "dna_ase_results_eqtl_noPAR.csv")
+#write_csv(reads_pg_pvals_dna, "dna_ase_results_eqtl_noPAR.csv")
 #head(reads_pg_pvals)
 
+# genes with potential mapping bias in the DNA data
 biasedgenes_dna<-filter(reads_pg_pvals_dna, sigTest == "sig" & abs(res.allele.log2FoldChange) >0.5) #%>% select(pairID, id_tx_mat, id_tx_pat)
 
 
-fold_change_cutoffs <- c(0.5, 1, 1.5, 2)
-obs_tables_dna <- lapply(fold_change_cutoffs, function(cutoff) {
+fold_change_cutoffs <- c(0,0.1,0.5, 1, 1.5, 2) # fc cutoffs for summary table
+obs_tables_dna <- lapply(fold_change_cutoffs, function(cutoff) { 
   get_obs_table(reads_pg_pvals_dna, cutoff)
 })
-combined_table_dna <- do.call(rbind, obs_tables_dna)
-print(combined_table_dna)
-write_csv(combined_table_dna, "n_xy_oe_DNA_eQTL_lfcRanges.csv")
+combined_table_dna <- do.call(rbind, obs_tables_dna) # combine tables
+print(combined_table_dna) # print table
+#write_csv(combined_table_dna, "n_xy_oe_DNA_eQTL_lfcRanges.csv")
 
 badgenes_dna<-reads_pg_dna_noPAR %>% 
   filter(female_mean.pat >= 20 & chr_tx_pat =="Y") %>% select(pairID,id_tx_mat,id_tx_pat)
@@ -225,8 +222,8 @@ badgenes<-rnaCountsClean %>%
 # some may be on Y PAR - which is fromm 0-45MB. Disregard and remove all for now!
 badgenes_x <- pgMatOrths %>% select(id_tx_mat,id_tx_pat) %>% filter(id_tx_pat%in%badgenes$Geneid) %>% select(id_tx_mat)
 ## find corresponding X gene for every "bad" Y gene
-shared_bad_biased<-intersect(badgenes$Geneid,biasedgenes_dna$id_tx_pat) # 327 genes
-shared_bad<-intersect(badgenes$Geneid,badgenes_dna$id_tx_pat) # 400 genes
+shared_bad_biased<-intersect(badgenes$Geneid,biasedgenes_dna$id_tx_pat) # 30 genes
+shared_bad<-intersect(badgenes$Geneid,badgenes_dna$id_tx_pat) # 394 genes
 ```
 
 
@@ -387,23 +384,7 @@ reads_pg<-left_join(pgMatOrths,eqtl_x, by = c("id_tx_mat"="Geneid")) %>%
   ungroup() %>% filter(totalCountAll >20)
 
 reads_pg_allfilters<-reads_pg %>% summarise(n=n())
-# 267 genes remain :()
-```
-  
-Attempting fishers exact test instead...
-we'll see
-```{r}
-# general idea
-# 
-#     X  Y
-# RNA counts 
-# DNA
-
-fisher <- function(a,b,c,d){
-  data <- matrix(c(a,b,c,d),ncol=2)
-  c(p = fisher.test(data)$p.value) 
-}
-
+# 274 genes remain
 ```
   
 
@@ -460,31 +441,21 @@ adj_pvals<-res.allele$padj
 
 pvals_genes<-data.frame(res.allele@rownames,res.allele$padj,res.allele$log2FoldChange,res.allele$lfcSE) #%>%
 reads_pg_pvals<-inner_join(reads_pg, pvals_genes, by =c("pairID" ="res.allele.rownames"))%>%
-  mutate(sigTest = 
-           case_when(res.allele.padj < 0.1 & abs(res.allele.log2FoldChange) > 1 ~ "sig",
+  mutate(sigTest = # just do significance, leave the log2foldchane to be filtered later omg
+           case_when(res.allele.padj < 0.1 ~ "sig", #& abs(res.allele.log2FoldChange) > 1 ~ "sig",
                      TRUE ~"nonsig" )) %>% 
   relocate(c(pairID:male_mean.mat, meanCounts.pat:male_mean.pat, res.allele.padj:sigTest))
 
-#write_csv(reads_pg_pvals, "rna_ase_results_eqtl_may17.csv")
-reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_may17.csv")
+write_csv(reads_pg_pvals, "data/rna_ase_results_eqtl_sept3.csv")
+#reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_may17.csv")
+reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_sept3.csv")
+
 head(reads_pg_pvals)
 ```
 
 
 ```{r}
-ggplot(reads_pg_pvals) +
-  geom_point(aes(x=start_tx_pat, 
-                 y = 2^res.allele.log2FoldChange/(1+2^res.allele.log2FoldChange), size = res.allele.lfcSE,
-                 color = sigTest),alpha = 0.5) 
-#ggsave("lfc_ase_log2_1.pdf")
-ggplot(reads_pg_pvals) +
-  geom_point(aes(y=(maleCountsTotal.pat+maleCountsTotal.mat)/(femaleCountsTotal.mat+femaleCountsTotal.pat), 
-                 x = maleCountsTotal.pat/(maleCountsTotal.mat),
-                 color = sigTest)) +ylim(0,1) + xlim(0,1) +geom_abline(intercept = 0.5, slope = 0.5)
-#ggsave("DC_expected_counts_Lfc1_axis.pdf")
 
-# fraction of genes ow or ue on Y depending on stringency
-# more stringent lgo2fc2 change, more reduced Y exp, but fewer sig sites
 ```
 ### read ratio, not using fold change ratio
 
@@ -657,9 +628,9 @@ ggsave("plots/combined_dc_plot_hemi_ysilence.jpg", h = 6, w =9)
 
 Messing around w KS plots
 ```{r}
-ks_raw<-read_table("Rhastxy.april2024.stephen.coge.aligncoords.gcoords.ks.txt", skip = 2) 
+ks_raw<-read_table("data/Rhastxy.april2024.stephen.coge.aligncoords.gcoords.ks.txt", skip = 2) 
 ks_colnames<-colnames(ks_raw)
-ks_raw<-read_table("Rhastxy.april2024.stephen.coge.aligncoords.gcoords.ks.txt", comment = "#", col_names = ks_colnames)
+ks_raw<-read_table("data/Rhastxy.april2024.stephen.coge.aligncoords.gcoords.ks.txt", comment = "#", col_names = ks_colnames)
 mydelim = "\\|\\|"
 col_parts_1 <- as.vector(unlist(str_split(colnames(ks_raw)[4],  mydelim)))
 col_parts_2<- as.vector(unlist(str_split(colnames(ks_raw)[8],  mydelim)))
@@ -756,6 +727,16 @@ ggsave("Ks_coords_allchr_TX_hap1_20win.pdf", h = 5, w = 9)
 ```
 
 ```{r}
+#Ks of DNA badgenes ?!
 
+bad_ks<- filter(ks_data_separated, id_tx_mat%in%badgenes_dna$id_tx_mat & id_tx_pat%in%badgenes_dna$id_tx_pat) %>% filter(chr1  =="Y" & chr2 =="X")
+### recall, Ks calculated b/w genes - much of these DNA reads are not genic!!!
+bad_ks_rna<- filter(ks_data_separated, id_tx_mat%in%badgenes_x$id_tx_mat & id_tx_pat%in%badgenes$Geneid) %>% filter(chr1  =="Y" & chr2 =="X")
+
+baddf<-setdiff(badgenes_x$id_tx_mat,badgenes_dna$id_tx_mat) # 960 genes in RNA are not mismapping in the DNA data - maternal
+reversebaddf<-setdiff(badgenes_dna$id_tx_mat, badgenes_x$id_tx_mat) #404 genes in dna are not mismapping in the RNA
+
+baddf2<-setdiff(badgenes$Geneid,badgenes_dna$id_tx_pat) #1144
+reversebaddf2<-setdiff(badgenes_dna$id_tx_pat,badgenes$Geneid) #405
 ```
 

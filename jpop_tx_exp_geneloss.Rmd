@@ -69,7 +69,7 @@ tophit_geneonly<- hits %>% group_by(qseqid) %>%
 # complete and partial loss a la NC paper
 ```{r}
 
-tophit_partial<- tophit_geneonly %>% filter(alignedpropn <= 0.5) ## 130 partially lost
+tophit_partial<- tophit_geneonly %>% filter(alignedpropn <= 0.5 & alignedpropn > 0) ## 130 partially lost
 tophit_notloss<-tophit_geneonly %>% filter(alignedpropn > 0.5)  ## only 24 genes "not lost"
 ## 376 lost before blast filtering, putatively
 
@@ -85,6 +85,12 @@ write_csv(complete_yloss, "data/tx_yloss_blastconfirmed_complete_Aug2024.csv")
 partial_yloss<-genelist_tx_mat %>% filter(!tx_mat%in%tophit_notloss$qseqid &
                                               tx_mat%in%tophit_partial$qseqid)
 write_csv(partial_yloss, "data/tx_yloss_blastconfirmed_partial_Aug2024.csv")
+
+heads<-c("genespace_yloss","blast_confirmed_loss","complete_loss","partial_loss")
+ylo<-(filter(summary_loss,chr =="X"))$n_loss
+
+vals<-c(376,352,222,130)
+resTable<-data.frame(heads,vals)
 ```
 
 
