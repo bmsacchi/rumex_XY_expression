@@ -255,79 +255,197 @@ ggplot(compareFactorsLong) + geom_point(aes(x = sample, y = value, color = normT
 
 
 ```
+Gene loss
+- using blast confirmed gene loss, not just the overlapping with NC ones!
+- need to record numbres of each though
+```{r}
+# load set of hemizygous genes, generated from jpop_tx_exp_geneloss.Rmd
+tx_yloss<-read_csv("data/genelist_tx_mat.txt",col_names = FALSE)
+tx_yloss_nc_overlap<-read.csv("data/tx_yloss_overlapNCcomplete_loss.csv")
+hemiz_blast_confirm<-read.csv("data/tx_yloss_blastconfirmed_Aug2024.csv")
+# 376 genes lost before blast filtering
+intersect(tx_yloss_nc_overlap$repGene, hemiz_blast_confirm$tx_mat) %>% length()
+intersect(hemiz_blast_confirm$tx_mat, tx_yloss_nc_overlap$repGene) %>% length()
+# all 125 nc overlap lost genes are also confirmed to be either completely or partially lost via blast
+hemiz_blast_partial<-read.csv("data/tx_yloss_blastconfirmed_partial_Aug2024.csv")
+hemiz_blast_complete<-read.csv("data/tx_yloss_blastconfirmed_complete_Aug2024.csv")
+
+# overlaps once more
+intersect(hemiz_blast_complete$tx_mat, tx_yloss_nc_overlap$repGene) %>% length() # 112
+intersect(hemiz_blast_partial$tx_mat, tx_yloss_nc_overlap$repGene) %>% length() # 13
+setdiff(hemiz_blast_complete$tx_mat, tx_yloss_nc_overlap$repGene) %>% length() #110/222 completely lost genes are not lost in NC
+setdiff(hemiz_blast_partial$tx_mat, tx_yloss_nc_overlap$repGene) %>% length() # 117/130 partially lost genes are not lost in NC
+
+#creating a data frame using dplyr where one column is gene name, the other is category (e.g. complete loss, partial loss), plus a third column for overlap with NC gene loss
+
+geneloss_categorized <- hemiz_blast_confirm %>% mutate(category = case_when(
+  tx_mat %in% hemiz_blast_complete$tx_mat ~ "complete loss",
+  tx_mat %in% hemiz_blast_partial$tx_mat ~ "partial loss",
+  TRUE ~ "no loss")) %>% 
+  mutate(nc_overlap = ifelse(tx_mat %in% tx_yloss_nc_overlap$repGene, "yes", "no"))
+
+test1<-chisq.test(table(geneloss_categorized$category,geneloss_categorized$nc_overlap))
+#X-squared = 56.827, df = 1, p-value = 4.759e-14
+
+geneloss_summary<- geneloss_categorized %>% group_by(category,nc_overlap) %>% summarise(n = n())              
+```
 
 ```{r}
-# load set of hemizygous genes
-tx_yloss_nc_overlap<-read.csv("data/tx_yloss_overlapNCcomplete_loss.csv")
-
 
 # replace og coutn tabels size factors
 dds_all$sizeFactor<-autoFactors
 dds_all$sizeFactor
 
 normalized_counts<-counts(dds_all, normalized=TRUE)
-normcounts<-as.data.frame(normalized_counts) %>% rownames_to_column()
+#normcounts<-as.data.frame(normalized_counts) %>% rownames_to_column()
 #write_csv(normcounts,"norm_counts_autosomefactors_eQTLleafRhast.csv")
 normcounts<-read_csv("data/norm_counts_autosomefactors_eQTLleafRhast.csv.gz")
 hemicounts <- as.data.frame(normalized_counts) %>% 
-  rownames_to_column(var = "Geneid") %>% filter(Geneid%in%tx_yloss_nc_overlap$repGene) %>%
+  rownames_to_column(var = "Geneid") %>% 
+  filter(Geneid%in%hemiz_blast_confirm$tx_mat) %>%
+  mutate(category = case_when(
+    Geneid %in% hemiz_blast_complete$tx_mat ~ "complete loss",
+    Geneid %in% hemiz_blast_partial$tx_mat ~ "partial loss",
+      TRUE ~ "no loss")) %>% 
+  mutate(nc_overlap = ifelse(Geneid %in% tx_yloss_nc_overlap$repGene, "yes", "no")) %>%
   rowwise %>% 
   mutate(maleMean = mean(c_across(contains("M",ignore.case = FALSE)))) %>%
   mutate(maleVar = sd(c_across(contains("M",ignore.case = FALSE)))) %>%
+  mutate(maleSE = plotrix::std.error(c_across(contains("M",ignore.case = FALSE)))) %>%
   mutate(femaleMean = mean(c_across(contains("F",ignore.case = FALSE)))) %>%
   mutate(femaleVar = sd(c_across(contains("F",ignore.case = FALSE)))) %>%
+  mutate(femaleSE = plotrix::std.error(c_across(contains("F",ignore.case = FALSE)))) %>%
   mutate(totalCount =sum(c_across("39dF":"43bM"))) %>%
   mutate(totalVar = sd(c_across("39dF":"43bM"))) %>%
   ungroup() %>%
   filter(totalCount >20)
 
-
-ggplot(hemicounts, aes(x = femaleMean, y = maleMean)) + 
-  geom_point(aes(size = femaleVar), alpha = 0.5) +
-  geom_smooth(method="lm") +
-  geom_abline(slope = 1, intercept = 0, linetype=1) + 
-  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
-  scale_x_continuous(expand = c(0, 0), limits = c(0, 20000),breaks =seq(0,18000,2000)) + 
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 20000),breaks =seq(0,18000,2000)) +
-  xlab("Average female expression") +
-  ylab("Average male expression")
-
-
-ggplot(hemicounts, aes(x = femaleMean, y = maleMean)) + 
-  geom_point(aes(size = maleVar), alpha = 0.5) +
-  geom_smooth(method="lm") +
-  geom_abline(slope = 1, intercept = 0, linetype=1) + 
-  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
-  scale_x_continuous(expand = c(0, 0), limits = c(0, 20000),breaks =seq(0,18000,2000)) + 
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 20000),breaks =seq(0,18000,2000)) +
-  xlab("Average female expression") +
-  ylab("Average male expression")
-
-ggplot(hemicounts, aes(x = femaleMean, y = maleMean)) + 
-  geom_point(aes(size = totalVar), alpha = 0.5) +
-  geom_smooth(method="lm") +
-  geom_abline(slope = 1, intercept = 0, linetype=1) + 
-  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
-  scale_x_continuous(expand = c(0, 0), limits = c(0, 26000),breaks =seq(0,18000,2000)) + 
-  scale_y_continuous(expand = c(0, 0), limits = c(0, 26000),breaks =seq(0,18000,2000)) +
-  xlab("Average female expression") +
-  ylab("Average male expression")
-
-ggplot(hemicounts, aes(x = femaleMean, y = maleMean)) + 
+# this plot shows SE error bars. Yeesh!!!!
+ggplot(hemicounts, aes(x = (femaleMean), y = (maleMean))) + 
   geom_point() +
-  geom_errorbar(aes(ymin = maleMean-maleVar, ymax = maleMean+maleVar)) +
-  geom_errorbarh(aes(xmin = femaleMean-femaleVar, xmax = femaleMean+femaleVar)) +
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE)) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE)) +
+  #geom_abline(intercept = coef(fit)[1], slope = coef(fit)[2], col='red') +
   geom_smooth(method="lm") +
   geom_abline(slope = 1, intercept = 0, linetype=1) + 
   geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
-  #scale_x_continuous(expand = c(0, 0), limits = c(0, 26000),breaks =seq(0,24000,2000)) + 
-  #scale_y_continuous(expand = c(0, 0), limits = c(0, 26000),breaks =seq(0,24000,2000)) +
+  #scale_x_continuous(trans ="log2") +#expand = c(0, 0), limits = c(0, 26000),breaks =seq(0,24000,2000)) + 
+  #scale_y_continuous(trans = "log2") +#expand = c(0, 0), limits = c(0, 26000),breaks =seq(0,24000,2000)) +
   xlab("Average female expression") +
   ylab("Average male expression")
+ggsave("plots/hemizygous_dosage_SE.png", h = 5, w = 7)
 
-ggsave("hemizygous_eqtldata_dosage_errorbars.jpg", h = 5, w = 7)
+### sooo much less shitty!
+### zoom in 
+
+ggplot(hemicounts, aes(x = (femaleMean), y = (maleMean))) + 
+  geom_point() +
+  ylim(0,2000) +
+  xlim(0,2000) +
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE)) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE)) +
+  geom_smooth(method="lm", se =TRUE) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+  xlab("Average female expression") +
+  ylab("Average male expression")
+# notice that a few genes have some weird evidence of DC stuff? possibly??
+ggsave("plots/hemizygous_dosage_lim2000.png", h = 5, w = 7)
+# zoom out
+ggplot(hemicounts, aes(x = (femaleMean), y = (maleMean))) + 
+  geom_point() +
+  ylim(2000,10000) +
+  xlim(2000,20000) +
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE)) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE)) +
+  geom_smooth(method="lm", se = TRUE) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+  xlab("Average female expression") +
+  ylab("Average male expression")
+ggsave("plots/hemizygous_dosage_largeVals.png", h = 5, w = 7)
+
+
+hemi_lm<- lm(maleMean ~ femaleMean, data = hemicounts)
+summary(hemi_lm)
+# slope =. 0.450908
+# Adjusted R-squared:  0.9939 
+# p-value: < 2.2e-16
+
+# 0.45 is the slope of the line. 0.5 is the expected slope for NO dosage compensation
+# 1 is the expected slope for dosage compensation. 
+
+
+
 ```
+Same plots but add colors/shapes for different types of hemizygous genes
+```{r}
+ggplot(hemicounts, aes(x = (femaleMean), y = (maleMean))) + 
+  ylim(0,2000) +
+  xlim(0,2000) +
+  geom_point(aes(colour = category)) +
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE), alpha = 0.5) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE),alpha = 0.5) +
+  #geom_abline(intercept = coef(fit)[1], slope = coef(fit)[2], col='red') +
+  geom_smooth(method="lm") +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+  #scale_x_continuous(trans ="log2") +#expand = c(0, 0), limits = c(0, 26000),breaks =seq(0,24000,2000)) + 
+  #scale_y_continuous(trans = "log2") +#expand = c(0, 0), limits = c(0, 26000),breaks =seq(0,24000,2000)) +
+  xlab("Average female expression") +
+  ylab("Average male expression")
+ggsave("plots/hemizygous_dosage_SE_cat_lim2000.png", h = 5, w = 7)
 
+# now coloring by whether there is overlap with NC
+ggplot(hemicounts, aes(x = (femaleMean), y = (maleMean))) + 
+  ylim(0,2000) +
+  xlim(0,2000) +
+  geom_point(aes(colour = nc_overlap)) +
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE), alpha = 0.5) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE),alpha = 0.5) +
+  #geom_abline(intercept = coef(fit)[1], slope = coef(fit)[2], col='red') +
+  geom_smooth(method="lm") +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+  xlab("Average female expression") +
+  ylab("Average male expression")
+ggsave("plots/hemizygous_dosage_SE_overlap_lim2000.png", h = 5, w = 7)
+
+ggplot(hemicounts, aes(x = (femaleMean), y = (maleMean))) + 
+  geom_point(aes(colour = nc_overlap)) +
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE), alpha = 0.5) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE),alpha = 0.5) +
+  geom_smooth(method="lm") +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+   xlab("Average female expression") +
+  ylab("Average male expression")
+
+# plot hist of female/male expression
+ggplot(hemicounts) +
+  geom_histogram(aes(x=maleMean/femaleMean, colour = nc_overlap),position="stack") +
+  xlim(0,2)
+
+# chisquare to see if there are more or less of the diff types of genes in each group of male/female X expression!?
+
+breaks <- c(-Inf, 0.2, 0.4, 0.6, 0.8, 1, 1.2, 1.4, 1.6, 1.8, 2, 2.2, 2.4, Inf)
+labels <- c("0-0.2", "0.2-0.4", "0.4-0.6", "0.6-0.8","0.8-1.0", "1.0-1.2", "1.2-1.4", "1.4-1.6", "1.6-1.8","1.8-2.0","2.0-2.2","2.2-2.4",">2.4")
+
+
+dosageSummaryCat <- hemicounts %>% 
+  mutate(dosageRatio = maleMean/femaleMean) %>% 
+  mutate(dc_range = cut(dosageRatio, breaks = breaks, labels = labels, right = FALSE)) %>%
+  group_by(category,dc_range) %>% summarise(n = n()) 
+
+dosageSummaryOverlap <- hemicounts %>% 
+  mutate(dosageRatio = maleMean/femaleMean) %>% 
+  mutate(dc_range = cut(dosageRatio, breaks = breaks, labels = labels, right = FALSE)) %>%
+  group_by(nc_overlap,dc_range) %>% summarise(n = n()) 
+
+# highly doubt there's any interesting pattern here LOL
+# was fun to check I guess
+
+```
 
 
 ## ASE
@@ -446,17 +564,14 @@ reads_pg_pvals<-inner_join(reads_pg, pvals_genes, by =c("pairID" ="res.allele.ro
                      TRUE ~"nonsig" )) %>% 
   relocate(c(pairID:male_mean.mat, meanCounts.pat:male_mean.pat, res.allele.padj:sigTest))
 
-write_csv(reads_pg_pvals, "data/rna_ase_results_eqtl_sept3.csv")
+#write_csv(reads_pg_pvals, "data/rna_ase_results_eqtl_sept3.csv")
 #reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_may17.csv")
-reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_sept3.csv")
+reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_sept3.csv.gz")
 
 head(reads_pg_pvals)
 ```
 
 
-```{r}
-
-```
 ### read ratio, not using fold change ratio
 
 ```{r}
@@ -555,8 +670,10 @@ silenced_counts <- as.data.frame(normalized_counts) %>%
   rowwise %>% 
   mutate(maleMean = mean(c_across(contains("M",ignore.case = FALSE)))) %>%
   mutate(maleVar = sd(c_across(contains("M",ignore.case = FALSE)))) %>%
+  mutate(maleSE = plotrix::std.error(c_across(contains("M",ignore.case = FALSE)))) %>%
   mutate(femaleMean = mean(c_across(contains("F",ignore.case = FALSE)))) %>%
   mutate(femaleVar = sd(c_across(contains("F",ignore.case = FALSE)))) %>%
+  mutate(femaleSE = plotrix::std.error(c_across(contains("F",ignore.case = FALSE)))) %>%
   mutate(totalCount =sum(c_across("39dF":"43bM"))) %>%
   mutate(totalVar = sd(c_across("39dF":"43bM"))) %>%
   ungroup() %>%
@@ -565,8 +682,8 @@ silenced_counts <- as.data.frame(normalized_counts) %>%
  
 ggplot(silenced_counts, aes(x = femaleMean, y = maleMean)) + 
   geom_point() +
-  geom_errorbar(aes(ymin = maleMean-maleVar, ymax = maleMean+maleVar)) +
-  geom_errorbarh(aes(xmin = femaleMean-femaleVar, xmax = femaleMean+femaleVar)) +
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE)) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE)) +
   geom_smooth(method="lm") +
   geom_abline(slope = 1, intercept = 0, linetype=1) + 
   geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
@@ -576,6 +693,23 @@ ggplot(silenced_counts, aes(x = femaleMean, y = maleMean)) +
   ylab("Average male expression")
 
 ggsave("silenced_yunderexpressed_dosagecomp.jpg",w = 7, h = 5)
+
+
+ggplot(silenced_counts, aes(x = femaleMean, y = maleMean)) + 
+  geom_point() +
+  ylim(0,100) +
+  xlim(0,100)+
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE)) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE)) +
+  geom_smooth(method="lm") +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +theme_classic() +
+  #scale_x_continuous(expand = c(0, 0), limits = c(0, 26000),breaks =seq(0,24000,2000)) + 
+  #scale_y_continuous(expand = c(0, 0), limits = c(0, 26000),breaks =seq(0,24000,2000)) +
+  xlab("Average female expression") +
+  ylab("Average male expression")
+ggsave("silenced_yunderexpressed_dosagecomp_100limits.jpg",w = 7, h = 5)
+
 ```
 
 Dosage compensation plot combined
@@ -593,8 +727,10 @@ normcounts_clean<-#as.data.frame(normalized_counts) %>%
   rowwise %>% 
   mutate(maleMean = mean(c_across(contains("M",ignore.case = FALSE)))) %>%
   mutate(maleVar = sd(c_across(contains("M",ignore.case = FALSE)))) %>%
+  mutate(maleSE = plotrix::std.error(c_across(contains("M",ignore.case = FALSE)))) %>%
   mutate(femaleMean = mean(c_across(contains("F",ignore.case = FALSE)))) %>%
   mutate(femaleVar = sd(c_across(contains("F",ignore.case = FALSE)))) %>%
+  mutate(femaleSE = plotrix::std.error(c_across(contains("F",ignore.case = FALSE)))) %>%
   mutate(totalCount =sum(c_across("39dF":"43bM"))) %>%
   mutate(totalVar = sd(c_across("39dF":"43bM"))) %>%
   ungroup() %>%
@@ -602,15 +738,17 @@ normcounts_clean<-#as.data.frame(normalized_counts) %>%
 dc_combo <- normcounts_clean %>% mutate(genetype = case_when(
    #Geneid%in%completely_silenced$id_tx_mat ~ "completeYsilenced",
     Geneid%in%x_overexpressed$id_tx_mat ~ "xOverexp",
-    #Geneid%in%y_overexpressed$id_tx_mat ~ "yOverexp",
-    Geneid%in%tx_yloss_nc_overlap$repGene ~ "hemizygous", TRUE ~ "other")) %>% 
+    Geneid%in%y_overexpressed$id_tx_mat ~ "yOverexp",
+    Geneid%in%hemiz_blast_confirm$tx_mat ~ "hemizygous", TRUE ~ "other")) %>% 
     filter(genetype != "other")
 
 
 ggplot(dc_combo, aes(x = femaleMean, y = maleMean, color = genetype)) + 
   geom_point(alpha = 0.5, size = 3) +
-  geom_errorbar(aes(ymin = maleMean-maleVar, ymax = maleMean+maleVar, color = genetype)) +
-  geom_errorbarh(aes(xmin = femaleMean-femaleVar, xmax = femaleMean+femaleVar, color = genetype)) +
+  ylim(0,500)+
+  xlim(0,500)+
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE, color = genetype)) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE, color = genetype)) +
   geom_smooth(method="lm", fullrange = TRUE) +
   geom_abline(slope = 1, intercept = 0, linetype=1) + 
   geom_abline(slope = 0.5, intercept = 0, linetype=2) +
@@ -622,7 +760,69 @@ ggplot(dc_combo, aes(x = femaleMean, y = maleMean, color = genetype)) +
         axis.title = element_text(size = 16),
         legend.text= element_text(size =12)) +
   scale_color_discrete(labels = c("hemizygous"="Hemizygous", "xOverexp" = "Partial or complete\n Y silencing"))
-ggsave("plots/combined_dc_plot_hemi_ysilence.jpg", h = 6, w =9)
+
+#ggsave("plots/combined_dc_plot_hemi_ysilence_updated.png", h = 6, w =9)
+ggsave("plots/combined_dc_plot_hemi_ysilence_limit500.png", h = 6, w =9)
+
+
+ggplot(dc_combo, aes(x = femaleMean, y = maleMean, color = genetype)) + 
+  geom_point(alpha = 0.5, size = 3) +
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE, color = genetype)) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE, color = genetype)) +
+  geom_smooth(method="lm", fullrange = TRUE) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +
+  theme_bw() +
+  xlab("Average female expression") +
+  ylab("Average male expression") +
+  labs(color= NULL) +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16),
+        legend.text= element_text(size =12)) +
+  scale_color_discrete(labels = c("hemizygous"="Hemizygous", "xOverexp" = "Partial or complete\n Y silencing")) +
+  facet_wrap(~genetype, scales = "free")
+
+```
+Plot for the pub
+- one w silenced genes and hamiz
+- one for sup w y oveexp
+
+```{r}
+dc_combo %>% filter(genetype == "yOverexp") %>% 
+  ggplot(aes(x = femaleMean, y = maleMean)) + 
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE)) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE)) +
+  geom_smooth(method="lm", fullrange = TRUE) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +
+  theme_bw() +
+  xlab("Average female expression") +
+  ylab("Average male expression") +
+  labs(color= NULL) +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16),
+        legend.text= element_text(size =12))
+
+ggsave("plots/yOverexp_dc_plot.png", h = 5, w = 7)
+
+dc_combo %>% filter(genetype != "yOverexp") %>% ggplot(aes(x = femaleMean, y = maleMean, color = genetype)) + 
+  geom_point(alpha = 0.5, size = 3) +
+  geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE, color = genetype)) +
+  geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE, color = genetype)) +
+  geom_smooth(method="lm", fullrange = TRUE) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) + 
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +
+  theme_bw() +
+  xlab("Average female expression") +
+  ylab("Average male expression") +
+  labs(color= NULL) +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16),
+        legend.text= element_text(size =12)) +
+  scale_color_discrete(labels = c("hemizygous"="Hemizygous", "xOverexp" = "Partial or complete\n Y silencing"))
+ggsave("plots/hemiz_xOverexp_dc_plot.png", h = 5, w = 7)
+
 ```
 
 

@@ -86,10 +86,11 @@ partial_yloss<-genelist_tx_mat %>% filter(!tx_mat%in%tophit_notloss$qseqid &
                                               tx_mat%in%tophit_partial$qseqid)
 write_csv(partial_yloss, "data/tx_yloss_blastconfirmed_partial_Aug2024.csv")
 
-heads<-c("genespace_yloss","blast_confirmed_loss","complete_loss","partial_loss")
+heads<-c("genespace_yloss","blast_confirmed_loss","complete_loss","partial_loss","overlap_nc_completeloss")
 ylo<-(filter(summary_loss,chr =="X"))$n_loss
 
-vals<-c(376,352,222,130)
+
+vals<-c(376,352,222,130,125)
 resTable<-data.frame(heads,vals)
 ```
 
@@ -110,13 +111,8 @@ overlap_yloss<-tx_yloss %>% filter(nc_hap1%in%ncGenesToKeep$repGene)
 ## all genes
 allncGenesToKeep<-nc_complete_loss %>% select(repGene)
 
-overlap_all_loss<-tx_mat_loss %>% filter(nc_hap1%in%allncGenesToKeep$repGene)
-# nvm basically the same, just one diff
-
-#overlap with blast loss:
 
 ```
-
 ```{r}
 write_csv(overlap_yloss, "tx_yloss_overlapNCcomplete_loss.csv")
 #write_csv(overlap_all, "tx_")
