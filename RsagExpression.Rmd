@@ -13,28 +13,15 @@ library(tidyverse)
 
 ## Sag deseq
 ```{r}
-rnaCounts<-read_table("readCountsSagittatus/sagittatusRnaCounts.txt")
-rnaColnames<-colnames(rnaCounts)
-rnaColnamesRepaired <- gsub("(Rsg.+)Aligned.+", "\\1", rnaColnames)
-colnames(rnaCounts)<-rnaColnamesRepaired 
+rnaCountsSag<-read_table("readCountsSagittatus/sagittatusRnaCounts.txt")
+rnaColnamesSag<-colnames(rnaCountsSag)
+rnaColnamesRepairedSag <- gsub("(Rsg.+)Aligned.+", "\\1", rnaColnamesSag)
+colnames(rnaCountsSag)<-rnaColnamesRepairedSag 
 
-readsMatSag<-rnaCounts %>% column_to_rownames("Geneid") %>% select(RsgL1:Rsg_1_1) # convert to matrix of all genes and inds
+readsMatSag<-rnaCountsSag %>% column_to_rownames("Geneid") %>% select(RsgL1:Rsg_1_1) # convert to matrix of all genes and inds
 
-sampleNames<- data.frame(colnames(readsMatSag)) 
+sampleNamesSag<- data.frame(colnames(readsMatSag)) 
 
-#df_sag<-DESeqDataSetFromMatrix(readsMatSag,sampleNames, design = ~ 1)
-#dds_sag <- DESeq(df_sag)
-
-#sagFactors<-sizeFactors(dds_sag)
-
-# much larger scaling factor for the more newly sequenced ind (emily,  2024? vs. transcriptomic stuff from 2019/2020 ish?)
-# its ok deseq does the norm stuff, just wanted to see!
-
-#normalized_counts_sag<-counts(dds_sag, normalized=TRUE)
-#normalized_counts_sagdf<- as.data.frame(normalized_counts_sag) %>% rownames_to_column(var = "id_sagittatus")
-#head(normalized_counts_sag)
-
-#write_csv(normalized_counts_sagdf,"norm_sagCounts.csv")
 ```
 
 
@@ -56,18 +43,18 @@ pgs_filt<- pgs %>% filter(Rhast_TX !="" & Rsag !="") %>% filter(!grepl("\\|",Rha
   distinct(Rsag, .keep_all =TRUE) %>%
   unite(pairID, c("Rhast_TX", "Rsag"),remove = FALSE)
   
-####
-
-
 ```
 
 
 ```{r}
-tx_yloss_nc_overlap<-read.csv("data/tx_yloss_overlapNCcomplete_loss.csv") 
+#tx_yloss_nc_overlap<-read.csv("data/tx_yloss_overlapNCcomplete_loss.csv") 
+tx_yloss<-read_csv("data/tx_yloss_blastconfirmed_Aug2024.csv")
+
+
 ```
 
 ```{r}
-reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_may17.csv",show_col_types =FALSE)
+reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_sept3.csv.gz",show_col_types =FALSE)
 
 x_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2FoldChange < 1) %>%
   select(id_tx_mat, id_tx_pat)
@@ -77,11 +64,11 @@ y_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 & res.allele.log2F
 ```
 
 ```{r}
-eQTL_counts<-read_delim("readCountsRNAeQTL/rhastTXeQTLrna.txt") %>%
-  select(!2:6)
+eQTL_counts<-read_delim("readCountsRNAeQTL/rhastTXeQTLrna.txt") #%>%
+  select(!2:7)
 
-sag_counts<-read_delim("readCountsSagittatus/sagittatusRnaCounts.txt") %>%
-  select(!2:6)
+sag_counts<-read_delim("readCountsSagittatus/sagittatusRnaCounts.txt") #%>%
+  select(!2:7)
 
 rnaColnames<-colnames(eQTL_counts)
 rnaColnamesRepaired <- gsub(".*NEBNext_dual_i._.+\\.([0-9]+[a-z]+[FM])LRAligned.+", "\\1", rnaColnames)
@@ -94,19 +81,22 @@ colnames(sag_counts)<-sagColnamesRepaired
 geneNames<-pgs_filt %>% select(pairID,Rhast_TX,Rsag,chr)
 
 allReadCounts<-left_join(geneNames,eQTL_counts, by = c("Rhast_TX" = "Geneid")) %>%
-  left_join(.,sag_counts,by = c("Rsag" = "Geneid")) %>% select(!2:3) %>% column_to_rownames(var = "pairID")
+  left_join(.,sag_counts,by = c("Rsag" = "Geneid")) %>% column_to_rownames(var = "pairID") #%>% select(!c("Rhast_TX","Rsag","chr"))
 
 sampleNames<- colnames(allReadCounts)
-#
 sampleInfo<-data.frame(sampleNames) 
+# remove headers
 
-df_all<-DESeqDataSetFromMatrix(allReadCounts,sampleInfo,design = ~ 1)
+
+df_all_sag<-DESeqDataSetFromMatrix(allReadCounts,sampleInfo,design = ~ 1)
 dds_all <- DESeq(df_all)
 allchrFactors<-sizeFactors(dds_all)
 normCounts<-counts(dds_all, normalized=TRUE)
-
+colnames(normCounts)
 
 write_delim(as.data.frame(normCounts),"data/normCounts_sag_and_rhast.txt")
+
+
 ```
 
 ```{r}
@@ -144,5 +134,12 @@ plot2<-dc_combo %>% filter(chr =="X") %>% ggplot(aes(x = maleMean, y = sagMean))
 cowplot::plot_grid(plot1,plot2) 
 ## sag expression is 
 ggsave("compare_sag_rhast_mf.pdf",w = 8,h =6)
+
+
 ```
+
+```{r}
+
+```
+
 
