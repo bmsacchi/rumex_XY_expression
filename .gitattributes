@@ -1,3 +1,5 @@
 *snakefile* linguist-language=Python
 *.csv filter=lfs diff=lfs merge=lfs -text
 *.csv.gz filter=lfs diff=lfs merge=lfs -text
+*.txt filter=lfs diff=lfs merge=lfs -text
+*.txt.gz filter=lfs diff=lfs merge=lfs -text
