@@ -1,3 +1,4 @@
+data/
 RNAbams/
 STARindex/
 fastqs/
@@ -33,3 +34,10 @@ data/*.fa*
 *.nin
 *.nsq
 rna_ase_results_eqtl_sept3.csv
+data/67935_67937.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.ks.txt
+data/readCountsSmallPop/
+data/readCountsDNAeQTL/
+data/readCountsRNAeQTL/
+data/67935_67937.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.ks.txt
+data/*.csv
+data/pangenes_tx/
