@@ -1,0 +1,94 @@
+library(ggplot2)
+library(tidyverse)
+library(cowplot)
+library(RColorBrewer)
+
+reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_sept12.csv.gz")
+
+reads_pg_pvals2 <- reads_pg_pvals %>% mutate(sigLFC = case_when(
+    res.allele.padj < 0.1 &
+      abs(res.allele.log2FoldChange) > 1 ~ "True",
+    TRUE ~"False" )) %>%
+  mutate(log2male_mean.mat = log2(male_mean.mat)) %>%
+  mutate(log2male_mean.pat = log2(male_mean.pat))
+  
+  
+reads_pg_pvals2$sigLFC<-factor(reads_pg_pvals2$sigLFC, levels = c("True","False"))
+
+figure1a <- ggplot(reads_pg_pvals2,aes(x=male_mean.mat,y=male_mean.pat, color = sigLFC)) + 
+  #geom_point(aes(size = res.allele.lfcSE),alpha = 0.60) +
+  geom_point(alpha = 0.5, size =1) +
+  geom_errorbar(aes(ymin = ((male_mean.pat)-(male_SE.pat)), ymax = ((male_mean.pat)+(male_SE.pat)))) +
+  geom_errorbarh(aes(xmin = male_mean.mat-male_SE.mat, xmax = male_mean.mat+male_SE.mat)) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) +
+  theme_bw()+
+  geom_smooth(method ="lm") +
+  xlab("mean expression of X\n gametolog in males") +
+  ylab("mean expression of Y\n gametolog in males") +
+  scale_x_continuous(transform = "log2",limits = c(NA,4000),breaks = c(0.0625,2,64,2048)) +
+  scale_y_continuous(transform = "log2",limits = c(NA,4000),breaks = c(0.0625,2,64,2048)) +
+  labs(color= "p-val < 0.1 & |log2FC| >1 ", size = "log2FC std. error") +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16),
+        legend.text = element_text(size =12),
+        legend.title = element_text(size =12)) 
+figure1a
+#### norm counts using size factors from dosage analysis
+pvals_genes_norm <- read_csv("data/norm_rna_ase_resultsOnlySept2024.csv")
+
+## normalized counts
+
+normCounts<-read_csv("data/normalizedCounts_xyExp.csv")
+
+## unite norm counts with pvals
+reads_pg_pvals_norm<-inner_join(normCounts, pvals_genes_norm, 
+                                by = c("pairID" ="res.allele.rownames"), keep=TRUE) %>%
+  mutate(
+    sigTest = # just do significance, leave the log2foldchane to be filtered later
+      case_when(res.allele.padj < 0.1 ~ "sig", 
+                TRUE ~"nonsig" ))
+### summarize
+get_obs_table(reads_pg_pvals_norm, 0.5)
+fold_change_cutoffs <- c(0.5, 1, 1.5, 2)
+obs_tables <- lapply(fold_change_cutoffs, function(cutoff) {
+  get_obs_table((filter(reads_pg_pvals_norm, res.allele.padj < 0.1)), cutoff)
+})
+
+combined_table <- do.call(rbind, obs_tables)
+print(combined_table) ## same results, not surprisingly
+## test occurs at the sample level, normalized counts won't change that
+
+reads_pg_pvals2_norm <- reads_pg_pvals_norm %>% mutate(sigLFC = case_when(
+  res.allele.padj < 0.1 &
+    abs(res.allele.log2FoldChange) > 1 ~ "True",
+  TRUE ~"False" )) #%>%
+mutate(log2male_mean.mat = log2(male_mean.mat)) %>%
+  mutate(log2male_mean.pat = log2(male_mean.pat))
+
+reads_pg_pvals2_norm$sigLFC<-factor(reads_pg_pvals2_norm$sigLFC, levels = c("True","False"))
+
+figure1a_norm <- 
+  ggplot(reads_pg_pvals2_norm,aes(x=matMean,y=patMean, color = sigLFC)) + 
+  #geom_point(aes(size = res.allele.lfcSE),alpha = 0.60) +
+  geom_point(alpha = 0.5, size =1) +
+  geom_errorbar(aes(ymin = patMean-patSE, ymax = patMean+patSE)) +
+  geom_errorbarh(aes(xmin = matMean-matSE, xmax =matMean+matSE)) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) +
+  theme_bw()+
+  geom_smooth(method ="lm") +
+  xlab("mean normalized expression of X\n gametolog in males") +
+  ylab("mean normalized expression of Y\n gametolog in males") +
+  scale_x_continuous(transform = "log2",limits = c(NA,4000),breaks = c(0.0625,2,64,2048)) +
+  scale_y_continuous(transform = "log2",limits = c(NA,4000),breaks = c(0.0625,2,64,2048)) +
+  labs(color= "p-val < 0.1 & |log2FC| >1 ", size = "log2FC std. error") +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16),
+        legend.text = element_text(size =12),
+        legend.title = element_text(size =12)) 
+figure1a_norm
+#ggsave("figures/Figure1_gametologExpressionNormalized.png", h =6, w =10)
+
+figure1a_norm
+figure1a
+######
+

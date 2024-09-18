@@ -1,0 +1,183 @@
+---
+title: "Ks estimates calculated using Hyphy"
+output:
+  html_document:
+    df_print: paged
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+# goal
+
+Do these Ks estimates compare to coge?
+What are the dn/ds patterns?
+Am I missing important orthologs?
+Are the results as expected?
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse, quietly = TRUE)
+library(vroom, quietly = TRUE)
+library(ggpubr)
+
+```
+
+### read in ks dataframe
+
+```{r}
+hyphy_data<-read_csv("hyphy/all_ks_updated.csv.gz", show_col_types = FALSE) %>%  
+  mutate(clean_branch = str_remove(branch, "_RA_1")) %>%
+  mutate(og = str_remove(OG, "\\.json")) %>%
+  select(-branch,-OG) %>% 
+  dplyr::rename(.,branch = clean_branch) %>%
+  dplyr::rename(.,OG = og) %>%
+  mutate(taxa = ifelse(grepl("Rsag", branch), "sagittatus",
+              ifelse(grepl("TX_maternal",branch), "rhast_tx_mat",
+              ifelse(grepl("TX_paternal", branch), "rhast_tx_pat", 
+              ifelse(grepl("buc", branch), "bucephalophorus", 
+              ifelse(grepl("Node2", branch), "node2", 
+               ifelse(grepl("Node3", branch), "node3", NA)))))))
+```
+
+### convert to wide format
+
+Add pairID column to compare with orthologues ID's previously
+
+```{r}
+hyphy_wide<-hyphy_data %>% pivot_wider(id_cols = OG, names_from =taxa, values_from = c("branch","dN","dS","LB","UB","MLE")) %>%
+  unite("pairID", c("branch_rhast_tx_mat", "branch_rhast_tx_pat"), sep = "_", remove = FALSE) 
+```
+
+### Add tx mat and tx pat Ks values
+
+this will get X-Y specific synonymous divergence per gene
+
+```{r}
+hyphy_sum <- hyphy_wide %>% 
+  mutate(XYdS = dS_rhast_tx_mat+dS_rhast_tx_pat) %>% 
+  mutate(dnds_calc_tx_mat = dN_rhast_tx_mat/dS_rhast_tx_mat) %>%
+  mutate(dnds_calc_tx_pat = dN_rhast_tx_pat/dS_rhast_tx_pat) %>%
+  mutate(YX_omegaDiff = MLE_rhast_tx_pat-MLE_rhast_tx_mat) %>%
+  mutate(YX_dNdiff = dN_rhast_tx_pat-dN_rhast_tx_mat) %>%
+  select(c(OG,pairID,branch_rhast_tx_mat,branch_rhast_tx_pat,dnds_calc_tx_mat,dnds_calc_tx_pat,
+           dS_rhast_tx_mat,dS_rhast_tx_pat,dN_rhast_tx_mat,dN_rhast_tx_pat,
+          XYdS,MLE_rhast_tx_mat,MLE_rhast_tx_pat,YX_omegaDiff,YX_dNdiff)) %>% drop_na()
+```
+
+### read in X-Y ortholog ASE data
+
+from eQTLdata_xyexpression.Rmd
+
+```{r}
+reads_pg<-read_csv("data/rna_ase_results_eqtl_may17.csv",show_col_types =FALSE)
+## sigtest variable needs fixing - it's fucked up for some reason
+hyphy_sum_match <- left_join(hyphy_sum, reads_pg) %>% drop_na() %>% 
+  mutate(sigTest = 
+           case_when(res.allele.padj < 0.1 & abs(res.allele.log2FoldChange) > 1 ~ "sig",
+                     TRUE ~"nonsig" )) %>% 
+  mutate(yx_readRatio = male_mean.pat/male_mean.mat) %>%
+  #mutate(yx_readRatio_plus = yx_readRatio+1) %>% 
+  filter(yx_readRatio != 0)
+
+# 241 obs!
+# 2 have read ratio=2 - deciding to remove
+# these completely silenced genes are significant and interesting, perhaps
+# but id rather be able to log transofmr without doing weird stuff..
+
+
+```
+
+### Ks plots
+
+```{r}
+dfKs<- hyphy_sum_match %>% 
+  select(XYdS,yx_readRatio,sigTest,res.allele.lfcSE,res.allele.log2FoldChange,res.allele.padj) %>%
+  mutate(log2_readRatio=log2(yx_readRatio))
+ks_lm<-lm(formula = log2_readRatio ~ XYdS, data = dfKs)
+#plot(ks_lm)
+summary(ks_lm)
+
+ggplot(dfKs) +geom_histogram(aes(log2_readRatio))
+
+ggplot(dfKs, aes(x = XYdS, y = log2_readRatio)) + 
+  geom_point(alpha = 0.5) +
+  scale_y_continuous(limits=c(-10,10)) +
+  geom_smooth(method = "lm",formula=y~x) +
+  geom_abline(intercept = coef(ks_lm)[1],slope = coef(ks_lm)[2]) +
+  ylab("log2 (y/x read ratio)") +
+  xlab("Ks") +
+  theme_bw(base_size = 20) +
+  geom_hline(yintercept = 0, linetype = "dashed") 
+
+ggsave("plots/log2Ratio_Ks_July17.pdf",h=6,w=8)
+
+
+
+```
+
+For sig snps we see a somewhat negative reslationship between y/x read ratio and Ks Essentially - older gametologs tend to have more X than Y expression especially when the ASE is significant
+
+# what about the relationship with dn/ds
+
+
+```{r}
+df_dN<- hyphy_sum_match %>% 
+  select(YX_dNdiff,yx_readRatio,sigTest,res.allele.lfcSE,res.allele.log2FoldChange,res.allele.padj,XYdS) %>%
+  mutate(log2_readRatio=log2(yx_readRatio))
+
+#lm1<-lm(formula = YX_dNdiff ~ yx_readRatio, data=df_dN)
+#lm2 <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS, data=df_dN)
+#lm3 <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS + XYdS:yx_readRatio, data=df_dN)
+lm4<-lm(formula = YX_dNdiff ~ log2_readRatio, data=df_dN)
+lm5<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS, data=df_dN)
+lm6<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS + XYdS:log2_readRatio, data=df_dN)
+
+AIC(lm4,lm5,lm6)
+summary(lm6)
+summary(lm5)
+step(lm6)
+#VIF(lm6) # VIF of 4 or larger means GTFO!
+## yay!
+AIC(lm4,lm5) # more negative is better? yay!
+# diff in AIC is more than too so that is good!
+## yay lm5!!!!! winner winnner chikcne dinnner
+
+```
+
+
+```{r}
+require(ggiraph)
+require(ggiraphExtra)
+require(plyr)
+
+ggPredict(lm5,se=TRUE) + theme_bw() +  
+  xlab("log2 (y/x read ratio)") +
+  ylab("difference in dN between Y and X gametologs") +
+  theme_bw(base_size = 18)
+ # geom_text(x = -7, y = 0.25, label = lm_eqn(df), parse = TRUE)
+  
+
+ggsave("plots/dN_log2readRatio_ggPredict.pdf",h=6,w=8)
+
+summary(lm5)
+```
+
+
+quad regression line
+```{r}
+hyphy_sum_match %>% mutate(my_model = predict(lm4)) %>%
+  ggplot() + 
+  geom_point(alpha = 0.5,aes(y = YX_dNdiff, x = log10(yx_readRatio_plus))) +
+  #geom_abline(intercept = coef(lm4)[1],slope = coef(lm4)[2],color = "red")+
+  stat_smooth(method = "glm",family = 
+                binomial+
+  geom_vline(xintercept = log10(2),linetype = "dashed") +
+  ggtitle("dNdiff ~ y/xRatio") +
+  stat_cor(aes(y=my_model,x=YX_dNdiff,label = after_stat(rr.label)), color = "red", geom = "label",r.digits = 4) +
+  theme_classic()
+
+
+
+```
+
+
