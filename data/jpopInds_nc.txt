@@ -1,12 +1,3 @@
-13.NF1
-14.NF2
-15.NF3
-16.NF4
-18.NF5
-19.NF6
-20.NM1
-21.NM2
-22.NM3
-23.NM4
-25.NM5
-27.NM6
+version https://git-lfs.github.com/spec/v1
+oid sha256:5d504996d12c94c44c4759b587789cd1b6bf8a3bb66867b57031e0220a699f76
+size 84
