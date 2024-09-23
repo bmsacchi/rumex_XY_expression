@@ -14,3 +14,4 @@ reads_pangenes_focalmale_TXanno.csv.gz
 reads_pangenes_jpop_TXanno.csv.gz
 reads_pangenes_jpop_TXanno_nsorthsincl.csv.gz
 readCountsSmallPop
+*.fa*
