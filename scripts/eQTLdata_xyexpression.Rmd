@@ -711,8 +711,10 @@ ks_win100_x<-windowmaker_2(ks_mb, win = 100, 0.3)
 
 ks_win50<-windowmaker_1(ks_mb,win = 50,0.3)
 ks_win20_x<-windowmaker_2(ks_mb, win = 20, 0.3)
+ks_win10<-windowmaker_1(ks_mb,win = 0,0.3)
+
 library(RColorBrewer)
-ggplot(filter(ks_win50,!grepl("scaffold", chr1)), aes(start1_mb,group = chr1)) +  
+ggplot(filter(ks_win10,!grepl("scaffold", chr1)), aes(start1_mb,group = chr1)) +  
    geom_line(aes(y=Ks_win, colour = chr1)) +
    facet_grid(~chr1,scales="free_x") +
    ylim(0,0.05) +

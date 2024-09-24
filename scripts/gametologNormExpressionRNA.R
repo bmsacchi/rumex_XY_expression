@@ -54,7 +54,7 @@ adj_pvals<-res.allele$padj
 pvals_genes_norm<-data.frame(res.allele@rownames,res.allele$padj,
                         res.allele$log2FoldChange,
                         res.allele$lfcSE) 
-write_csv(pvals_genes_norm, "data/norm_rna_ase_resul#tsOnlySept2024.csv")
+write_csv(pvals_genes_norm, "data/norm_rna_ase_resultsOnlySept2024.csv.gz")
 
 
 ##### NEED TO PLOT NORMALIZED COUNTS
