@@ -6,7 +6,7 @@ library(gtools)
 rnaCountsClean<-read_csv("data/rnaCountsClean.csv.gz")
 
 source("scripts/gametologExpressionDNA.R")
-pgMatOrths<-read_csv("data/pgMatOrths.csv")
+pgMatOrths<-read_csv("data/pgMatOrths.csv.gz")
 #### RNA counts
 ### most up-to date results
 ## main pipeline won't run without it
