@@ -7,7 +7,7 @@ n_xy_oe_RNA_eQTL_lfcRanges.csv.gz
 normalizedCounts_xyExp.csv.gz
 readCountsDNAeQTL/
 readCountsRNAeQTL/
-readCountsSagittatus/sagittatusRnaCounts.txt
+readCountsSagittatus/
 rna_ase_results_eqtl_may17.csv.gz
 rna_ase_results_eqtl.csv.gz
 reads_pangenes_focalmale.csv.gz
