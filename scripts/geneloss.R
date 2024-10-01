@@ -95,6 +95,8 @@ resTable<-data.frame(heads,vals)
 
 ## upload the completely lost genes from NC
 # 167 genes lost in NC
+
+# old or new Y?!?!?!?!?!?!?!?!?! 
 nc_complete_loss<-read.csv("../rumex_pangenome_annotation/complete_yloss_Sept2023.csv") %>% mutate(nctype = "complete")
 nc_partial_loss<-read.csv("../rumex_pangenome_annotation/yloss_partial_Sept2023.csv") %>% mutate(nctype ="partial")
 nc_all_loss<-rbind(nc_complete_loss,nc_partial_loss) %>% filter(chr =="X") #%>% select(repGene)

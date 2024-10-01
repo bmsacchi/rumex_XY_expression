@@ -60,16 +60,21 @@ hyphy_reads_pg <- left_join(hyphy_sum, reads_pg) %>%
 ## model
 ks_lm<-lm(formula = log2_readRatio ~ XYdS, data = dfKs) 
 #plot(ks_lm)
-
+ks_lm_filt<-lm(formula = log2_readRatio ~ XYdS, data = dfKs %>% filter(XYdS < 0.2))
 summary(ks_lm)
+summary(ks_lm_filt)
 ## histogram
 
 #ggplot(dfKs) +geom_histogram(aes(log2_readRatio))
 
+model_poly <- lm(log2_readRatio ~ poly(XYdS, 2), data = hyphy_reads_pg)
+summary(model_poly)
 ################################################################################
 ################### ds expression scatterplots #################################
 
-ggplot(hyphy_reads_pg, aes(x = XYdS, y = log2_readRatio)) + 
+hyphy_reads_pg %>%
+  filter(XYdS <0.5) %>%
+  ggplot(aes(x = XYdS, y = log2_readRatio)) + 
   geom_point(alpha = 0.5) +
   #scale_y_continuous(limits=c(-10,10)) +
   ylim(-10,10) + 
@@ -79,7 +84,20 @@ ggplot(hyphy_reads_pg, aes(x = XYdS, y = log2_readRatio)) +
   xlab("XYdS") +
   theme_bw(base_size = 20) +
   geom_hline(yintercept = 0, linetype = "dashed") 
-ggsave("figures/Ks_log2readRatio_scatter.png", h = 6, w = 8)
+#ggsave("figures/Ks_log2readRatio_scatter.png", h = 6, w = 8)
+
+x_range <- data.frame(XYdS = seq(min(hyphy_reads_pg$XYdS), max(hyphy_reads_pg$XYdS), length.out = 165))
+
+x_range$y_pred <- predict(model_poly, newdata = x_range) 
+
+ggplot(hyphy_reads_pg, aes(x = XYdS, y = log2_readRatio)) + 
+  geom_point(alpha = 0.5) +
+  #scale_y_continuous(limits=c(-10,10)) +
+  ylim(-10,10) +
+  ylab("log2 (y/x read ratio)") +
+  xlab("XYdS") +
+  theme_bw(base_size = 20) +
+  geom_hline(yintercept = 0, linetype = "dashed") 
 
 ## but is it significant?
 lm_yx<-lm(formula = log2_readRatio ~ XYdS, data = hyphy_reads_pg)
@@ -133,6 +151,7 @@ anno<-vroom::vroom("data/merged_TX_noMatPARlarge_txanno.gtf",
   mutate(Geneid = str_remove_all(Geneid, "-RA"))
 
 # merge Ks data hwere available!
+
 hyphy_anno<- left_join(hyphy_sum, anno, by = c("branch_rhast_tx_pat" = "Geneid")) %>% 
   left_join(.,anno, by = c("branch_rhast_tx_mat" = "Geneid"), suffix = c(".pat",".mat")) %>%
   mutate(start.mat.mb = start.mat/1e6) %>%
@@ -147,7 +166,7 @@ hyphy_anno %>% filter(seqname.pat == "Y") %>%
   geom_vline(xintercept = 45,linetype = "dashed", color = 'red') +
   theme_bw(base_size = 20)
   
-ggsave("figures/ds_Ypos.png", h = 6, w = 8)
+#ggsave("figures/ds_Ypos.png", h = 6, w = 8)
 ## plot along X position
 hyphy_anno %>% filter(seqname.mat == "X") %>%
   filter(XYdS <1) %>%
@@ -155,7 +174,7 @@ hyphy_anno %>% filter(seqname.mat == "X") %>%
   geom_point(aes(x=start.mat.mb, y=XYdS)) +
   xlab("X chromosome position (Mb)") +
   theme_bw(base_size = 20) 
-ggsave("figures/ds_Xpos.png", h = 6, w = 8)
+#ggsave("figures/ds_Xpos.png", h = 6, w = 8)
 
 ## left_join with reads_pg
 pg_select<-reads_pg %>% select(1:27) %>% 
@@ -174,17 +193,20 @@ hyphy_anno_reads <- hyphy_anno %>% left_join(.,pg_select, by = c("pairID")) %>%
 
 ### plot points along Y and color by type of expression
 
-hyphy_anno_reads %>% filter(seqname.pat == "Y") %>% filter(XYdS <0.5) %>%
+ppos<-hyphy_anno_reads %>% filter(seqname.pat == "Y") %>% filter(XYdS <0.5) %>%
   ggplot() + 
   geom_point(aes(x=start.pat.mb, y=XYdS, color = expType)) +
   xlab("Y chromosome position (Mb)") +
   geom_vline(xintercept = 45,linetype = "dashed", color = 'red') +
-  theme_bw(base_size = 20) +
+  theme_classic(base_size = 20) +
   scale_color_manual(values=alpha(c("darkorange","darkblue"),c(0.75, 0.75)), 
-                     na.value = alpha("grey",0.3), labels = c("Y/X > 1", "Y/X < 1"))
-ggsave("figures/ds_Ypos_exp.png", h = 6, w = 8)
+                     na.value = alpha("grey",0.3), labels = c("Y/X > 1", "Y/X < 1")) +
+  theme(legend.text=element_text(size=12), legend.title=element_blank())
 
-write_csv(hyphy_anno_reads, "data/hyphy_anno_reads.csv.gz")
+ppos
+#ggsave("figures/ds_Ypos_exp.png", h = 6, w = 8)
+
+#write_csv(hyphy_anno_reads, "data/hyphy_anno_reads.csv.gz")
 
 ################# ks window plots ##############################################
 
@@ -197,35 +219,55 @@ windowmaker_mat<- function(df,win,ks){df %>% filter(XYdS<ks) %>%
 windowmaker_pat<- function(df,win,ks){df %>% filter(XYdS<ks) %>%
     group_by(seqname.pat) %>%
     arrange(branch_rhast_tx_pat,seqname.pat, start.pat.mb) %>%
-    mutate(Ks_win = slider::slide_dbl(XYdS, median, .before = win/2, .after = win/2,.step = 1,.complete =T))}
+    mutate(Ks_win = slider::slide_dbl(XYdS, 
+                                      median, .before = win/2, .after = win/2,.step = 1,
+                                      .complete =T))}
+
 
 ks_win100<-windowmaker_pat(hyphy_anno,win = 100,0.5) %>% drop_na(seqname.pat)
 #ks_win50<-windowmaker_pat(hyphy_anno,win = 50,0.5)
-
+ks_win100_filt<-filter(ks_win100, seqname.pat == "Y" & !is.na(Ks_win)) %>% 
+  arrange(start.pat.mb) %>% mutate(win = 1:nrow(.))
+#write_csv(ks_win100_filt, "data/ks_win100_windowNumsY.csv.gz")
 
 ggplot(ks_win100, aes(start.pat.mb,group = seqname.pat)) +
+  #geom_point(aes(y=XYdS, x = start.pat.mb ), color = "Grey",alpha = 0.3) +
   geom_line(aes(y=Ks_win, colour = seqname.pat)) +
   facet_grid(~seqname.pat,scales="free_x") +
-  #ylim(0,0.1) + 
+#  ylim(0,0.3) + 
   scale_color_brewer(palette = "Dark2") +
   xlab("Y-bearing Haplotype\nposition(Mb)") +
   ylab("Median Ks\n(100 gene windows)") +
   theme_classic()
 
-ggsave("figures/ds_allchr_pat_100win.png", h = 5, w = 9)
+#ggsave("figures/ds_allchr_pat_100win.png", h = 5, w = 9)
 
 ## y plot window only
-ks_win100 %>% filter(seqname.pat == "Y") %>% 
-  ggplot(aes(start.pat.mb,group = seqname.pat)) +
-  geom_line(aes(y=Ks_win, colour = seqname.pat)) +
-  facet_grid(~seqname.pat,scales="free_x") +
+pwin<-ks_win100 %>% filter(seqname.pat == "Y") %>% 
+  ggplot(aes(start.pat.mb)) +
+  geom_line(aes(y=Ks_win)) +
+  #facet_grid(~seqname.pat,scales="free_x") +
   #ylim(0,0.1) + 
   scale_color_brewer(palette = "Dark2") +
   xlab("Y chromosome position(Mb)") +
-  ylab("Median Ks\n(100 gene windows)") +
+  ylab("Median XYdS\n(100 gene windows)") +
   geom_vline(xintercept = 45,linetype = "dashed", color = 'red') +
-  theme_classic()
-ggsave("figures/ds_Ychr_pat_100win.png", h = 5, w = 9)
+  theme_classic(base_size = 20)
+pwin
+#ggsave("figures/ds_Ychr_pat_100win.png", h = 5, w = 9)
+
+
+#### combine plots
+
+cowplot::plot_grid(ppos, pwin, ncol = 1, align = "v",labels = c("A","B"))
+ggsave("figures/ds_panels_window_point.png", h = 8, w = 12)
+### gene density
+ks_win100 %>% filter(seqname.pat == "Y") %>%
+  ggplot() + geom_freqpoly(aes(x=start.pat.mb),bins = 50) +
+  theme_bw() +
+  geom_vline(xintercept = 45,linetype = "dashed", color = 'red')
+
+ggsave("figures/Ychr_pat_gene_density.png", h = 6, w = 8)
 
 
 ### compare with "badgenes" 

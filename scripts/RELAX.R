@@ -54,8 +54,8 @@ reads_pg<-read_csv("data/rna_ase_results_eqtl_sept12.csv.gz",show_col_types =FAL
   select(1:27) 
 relax_reads_pg<-left_join(reads_pg, relax_df_dedup, by = "pairID") %>% 
   drop_na() %>%
-  mutate(padj = p.adjust(pval, method = 'fdr', n = length(pval))) %>%
-  mutate(sigRelax = ifelse(padj < 0.05, "True", "False")) %>%
+  #mutate(padj = p.adjust(pval, method = 'fdr', n = length(pval))) %>%
+  mutate(sigRelax = ifelse(pval < 0.05, "True", "False")) %>%
   mutate(sigLFC = case_when(
     res.allele.padj < 0.1 &
       abs(res.allele.log2FoldChange) > 1 ~ "True",
@@ -78,10 +78,12 @@ print(tab1)
 test1<-fisher.test(tab1)
 test1 # yeah not significant no surprise there!!!
 #### direction
-summarize_relax2<- relax_reads_pg %>% filter(sigTest =="sig" & sigRelax == "True") %>%
-  group_by(sigRelax, res.allele.log2FoldChange>0,type) %>% dplyr::summarise(n = n())
-summarize_relax2
+summarize_relax2<- relax_reads_pg %>% filter(sigTest =="sig" & sigRelax == "True") #%>%
+  group_by(sigRelax, res.allele.log2FoldChange>0,type) %>% dplyr::summarise(n = n()) %>% ungroup() 
 
+# transform into contigency table format
+tab2<-table(summarize_relax2$type, summarize_relax2$res.allele.log2FoldChange>0)
+tab2
 
-### save results
-write_csv(relax_df, "data/relax_results.csv.gz")
+test2<-fisher.test(tab2)
+test2 #NOP  
