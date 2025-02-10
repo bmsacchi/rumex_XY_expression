@@ -1,5 +1,6 @@
-library(tidyverse)
 source("scripts/generalFunctions.R")
+library(tidyverse)
+library(cowplot)
 
 reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_sept12.csv.gz")
 # normcounts<-read_csv("data/norm_rna_ase_resultsOnlySept2024.csv.gz")
@@ -22,8 +23,7 @@ y_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 &
 #
 normcounts_clean<-#as.data.frame(normalized_counts) %>% 
   normcounts %>%
-  dplyr::rename("Geneid" ="rowname") %>%
-  rowwise %>% 
+  dplyr::rename("Geneid" ="rowname") %>% rowwise() %>% 
   mutate(maleMean = mean(c_across(contains("M",ignore.case = FALSE)))) %>%
   mutate(maleVar = sd(c_across(contains("M",ignore.case = FALSE)))) %>%
   mutate(maleSE = plotrix::std.error(c_across(contains("M",ignore.case = FALSE)))) %>%
@@ -47,6 +47,8 @@ dc_combo <- normcounts_clean %>% mutate(genetype = case_when(
   Geneid%in%hemiz_blast_confirm$tx_mat ~ "hemizygous", TRUE ~ "other")) %>% 
   filter(genetype != "other")
 #
+#write_csv(dc_combo, "data/norm_counts_autosomefactors_eQTLleafRhast_summary.csv.gz")
+
 #
 # ggplot(dc_combo, aes(x = femaleMean, y = maleMean, color = genetype)) + 
 #   geom_point(alpha = 0.5, size = 3) +
@@ -102,7 +104,9 @@ dc_combo %>% filter(genetype != "yOverexp") %>% ggplot(aes(x = femaleMean, y = m
         axis.title = element_text(size = 16),
         legend.text= element_text(size =12)) +
   scale_color_discrete(labels = c("hemizygous"="Hemizygous", "xOverexp" = "Partial or complete\n Y silencing"))
-ggsave("figures/Fig3_hemiz_xOverexp_dc_plot.png", h = 5, w = 7)
+
+
+#ggsave("figures/Fig3_hemiz_xOverexp_dc_plot.png", h = 5, w = 7)
 
 
 
@@ -127,7 +131,11 @@ ggplot(dc_combo, aes(x = femaleMean, y = maleMean, color = genetype)) +
 
 ####
 
-dc_combo %>% filter(genetype != "yOverexp") %>% ggplot(aes(x = femaleMean, y = maleMean, color = genetype)) + 
+library(khroma)
+vibrant<- color("vibrant")
+mycolors<-vibrant(7)[c(5,2)]
+#vignette("tol")
+mainplot<-dc_combo %>% filter(genetype != "yOverexp") %>% ggplot(aes(x = (femaleMean), y = (maleMean), color = genetype)) + 
   geom_point(alpha = 0.5, size = 3) +
   geom_errorbar(aes(ymin = maleMean-maleSE, ymax = maleMean+maleSE, color = genetype)) +
   geom_errorbarh(aes(xmin = femaleMean-femaleSE, xmax = femaleMean+femaleSE, color = genetype)) +
@@ -138,8 +146,77 @@ dc_combo %>% filter(genetype != "yOverexp") %>% ggplot(aes(x = femaleMean, y = m
   xlab("Average female expression") +
   ylab("Average male expression") +
   labs(color= NULL) +
+  theme_classic() +
   theme(axis.text = element_text(size = 12),
         axis.title = element_text(size = 16),
         legend.text= element_text(size =12)) +
-  scale_color_discrete(labels = c("hemizygous"="Hemizygous", "xOverexp" = "Partial or complete\n Y silencing"))
-ggsave("figures/combined_dc_plot_hemi_ysilence_updated.png", h = 6, w =9)
+  guides(color=guide_legend(override.aes=list(fill=NA))) +
+  scale_color_manual(values = mycolors,labels = c("hemizygous"="Hemizygous", "xOverexp" = "Partial or complete\n Y silencing"))
+mainplot
+
+
+
+#ggsave("figures/combined_dc_plot_hemi_ysilence_updated.png", h = 6, w =9)
+inset<- mainplot + ylim(0,500) +xlim(0,500) + 
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none") 
+inset
+
+library(cowplot)
+
+ggdraw(mainplot + theme_half_open(12)) +
+  draw_plot(inset,
+            x=.53,y= 0.1, width =.3,height = .4) +theme(legend.position = )
+ggsave("figures/Fig5_dcPlot_inset.png", bg = "white",  h = 5, w = 7)
+
+##### log
+df<- dc_combo %>% filter(genetype != "yOverexp") %>% 
+  mutate(log2maleMean = log2(maleMean), log2femaleMean = log2(femaleMean),halffemaleMean = 0.5*(femaleMean)) %>% mutate(log2halffemaleMean = log2(halffemaleMean))
+fitlm = lm(maleMean ~ halffemaleMean,data=df)
+df$pred1 = predict(fitlm)
+fitlm2 = lm(maleMean ~ femaleMean, data =df)
+df$pred2 = predict(fitlm2)
+#mainplotlog2<-
+
+
+
+
+ggplot(df,aes(x = femaleMean, y = maleMean, color = genetype)) + geom_point(alpha = 0.5, size = 3) +
+  geom_line(aes(x=halffemaleMean,y = pred1), color = "black") +
+  geom_line(aes(x=femaleMean, y=pred2), color = "green") +
+  geom_abline(slope = 0.5, intercept = 0, linetype=2) +
+  geom_abline(slope = 1, intercept = 0, linetype=1) +
+  theme_bw() +
+  xlab("Average female expression") +
+  ylab("Average male expression") +
+  labs(color= NULL) +
+  theme_bw() +
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 16),
+        legend.text= element_text(size =12)) +
+  #scale_x_continuous(transform = "log2",limits = c(NA,4000),breaks = c(0.0625,2,12,24,64,2048)) +
+  #scale_y_continuous(transform = "log2",limits = c(NA,4000),breaks = c(0.0625,2,12,24,64,2048)) +
+  scale_color_manual(values = mycolors,labels = c("hemizygous"="Hemizygous", "xOverexp" = "Partial or complete\n Y silencing"))
+ggsave("figures/dosagelog2plots.png")
+
+mainplotlog2
+
+
+
+#ggsave("figures/combined_dc_plot_hemi_ysilence_updated.png", h = 6, w =9)
+inset<- mainplot + ylim(0,500) +xlim(0,500) + 
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        legend.position = "none") +
+  scale_x_continuous(transform = "log2")+
+  scale_y_continuous(transform = "log2") 
+inset
+
+
+ggdraw(mainplot + theme_half_open(12)) +
+  draw_plot(inset,
+            x=.53,y= 0.1, width =.3,height = .4)
+ggsave("figures/Fig5_dcPlot_inset.png", bg = "white",  h = 5, w = 7)
+
+

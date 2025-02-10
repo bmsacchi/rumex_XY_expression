@@ -8,6 +8,7 @@ library(slider)
 
 reads_pg<-read_csv("data/rna_ase_results_eqtl_sept12.csv.gz",show_col_types =FALSE) 
 
+
 ## read in ks dataframe 
 
 hyphy_data<-read_csv("hyphy/all_ks_updated.csv.gz", show_col_types = FALSE) %>%  
@@ -71,6 +72,7 @@ model_poly <- lm(log2_readRatio ~ poly(XYdS, 2), data = hyphy_reads_pg)
 summary(model_poly)
 ################################################################################
 ################### ds expression scatterplots #################################
+vibrant<-khroma::color("vibrant")
 
 hyphy_reads_pg %>%
   filter(XYdS <0.5) %>%
@@ -78,14 +80,14 @@ hyphy_reads_pg %>%
   geom_point(alpha = 0.5) +
   #scale_y_continuous(limits=c(-10,10)) +
   ylim(-10,10) + 
-  geom_smooth(method = "lm",formula=y~x) +
+  geom_smooth(method = "lm",formula=y~x, color ="black") +
   #geom_abline(intercept = coef(ks_lm)[1],slope = coef(ks_lm)[2]) +
   ylab("log2 (y/x read ratio)") +
   xlab("XYdS") +
-  theme_bw(base_size = 20) +
+  theme_classic(base_size = 16) +
   geom_hline(yintercept = 0, linetype = "dashed") 
 #ggsave("figures/Ks_log2readRatio_scatter.png", h = 6, w = 8)
-
+ggsave("figures/figure2_2025Jan.png", h =4, w = 6)
 x_range <- data.frame(XYdS = seq(min(hyphy_reads_pg$XYdS), max(hyphy_reads_pg$XYdS), length.out = 165))
 
 x_range$y_pred <- predict(model_poly, newdata = x_range) 
@@ -136,10 +138,37 @@ require(plyr)
 ggPredict(lm5,se=TRUE) + theme_bw() +  
   xlab("log2 (y/x read ratio)") +
   ylab("dN Y - dN X") +
-  theme_bw(base_size = 18)
-ggsave("figures/Figure2_dN_log2readRatio_ggPredict.png",h=6,w=8)
+  theme_classic(base_size = 18)
+ggsave("figures/Figure4_2025Jan.png",h=6,w=8)
 
 summary(lm5)# geom_text(x = -7, y = 0.25, label = lm_eqn(df), parse = TRUE)
+
+
+
+################## dN vs Ds plot for sanity reasons? #####################
+lm1<-lm(formula = YX_dNdiff ~ XYdS, data=hyphy_reads_pg)
+lm2 <- lm(formula = YX_dNdiff ~ XYdS + log2_readRatio, data=hyphy_reads_pg)
+lm3 <- lm(formula = YX_dNdiff ~ XYdS + log2_readRatio:XYdS, data=hyphy_reads_pg)
+AIC(lm1,lm2,lm3) ## #3 wins
+ggPredict(lm1,se=TRUE) + theme_bw() +  
+  xlab("dS") +
+  ylab("dN Y - dN X") +
+  theme_classic(base_size = 18)
+ggsave("figures/DnVsDs_2025Jan.png", h =6, w =8)
+summary(lm1)
+summary(lm3)
+mymodels<-list(lm1,lm2,lm3)
+names<-c("lm1","lm2","lm3")
+aictab(mymodels, modnames = names)
+library(khroma) # rpretty and color blind friendly
+ggPredict(lm3,se=TRUE) +
+  theme_bw() +  
+  xlab("dS") +
+  ylab("dN Y - dN X") +
+  theme_classic(base_size = 18) + 
+  scale_color_bam() +
+  scale_fill_bam() 
+ggsave("figures/DnVsDs_interaction_2025Jan.png", h =6, w =8)
 
 ################### ks plot positions all genes ################################
 

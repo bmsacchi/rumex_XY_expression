@@ -1,13 +1,17 @@
 ### gene loss
+
 library(tidyverse, quietly = TRUE)
 library(vroom, quietly = TRUE)
 library(data.table, quietly = TRUE)
-
+source("scripts/slr_rename.R")
 ### gene loss and hemizyogus genes
 # same approach to NC paper
 
-mat_synorths_raw<-data.table::fread("data/pangenes_tx/tx_mat_pg_synorths.txt.gz") #%>% mutate(across(start:end, as.numeric))
-mat_nsorths_raw<-data.table::fread("data/pangenes_tx/tx_mat_pg_all.txt.gz") #%>% mutate(across(start:end, as.numeric))
+########### loading in syntenic and nonsyntenic orthologs for XY, mat ###########
+mat_synorths_raw<-data.table::fread("data/pangenes_tx/tx_mat_pg_synorths.txt.gz") 
+mat_nsorths_raw<-data.table::fread("data/pangenes_tx/tx_mat_pg_all.txt.gz") 
+
+###### rename with correct PAR boundaries ###########
 #identify which entries have nsorthos for txmat pat and rsal genomes
 # same as prev filtering for NC, but i use a slightly different function bc there were only 3 genomes being compared in that case (here there's many more)
 nsorths<-slr_rename_TX_PAR(mat_nsorths_raw) %>% filter_at(vars(c("tx_mat","tx_pat","Rsal")),any_vars(grepl("\\*",.))) 
@@ -21,23 +25,29 @@ hasanortho<-onlysyn %>%
   filter((tx_mat!=""|tx_pat!="")&Rsal!="")
 
 ## n that has an ortho X and Y only
-filter(hasanortho, tx_mat!="" & chr =="X") %>% nrow() # 
-#filter(mat_synorths_raw, chr =="X") %>% nrow()
-## 1675
+filter(hasanortho, tx_mat!="" & chr =="X") %>% nrow() 
+# 1675
+#just SLR
+filter(hasanortho, tx_mat!="" & chr =="X" & region =="SLR") %>% nrow() 
+# 1031 in SLR
+
 # !="" means "not absent". =""means "gene absent"
 # this stressed me out for a minute!
-notlost<-onlysyn %>% filter((tx_mat!="" & tx_pat!="" & Rsal!=""))
+notlost<-onlysyn %>% filter((tx_mat!="" & tx_pat!="" & Rsal!="")) 
+
+notlost %>% group_by(chr, region) %>% summarise(n=n())
 
 ## hemizygous?
-tx_mat_loss<-onlysyn %>% filter(tx_mat!="" & tx_pat=="" & Rsal!="")
+tx_mat_loss<-onlysyn %>% filter(tx_mat!="" & tx_pat=="" & Rsal!="")  
+tx_mat_loss %>% group_by(chr, region) %>% summarise(n=n())
 
+tx_mat_loss %>% filter(chr =="X") %>% group_by(region) %>% summarise(n=n())
 ## gene loss by chr
 
-summary_loss<- tx_mat_loss %>% dplyr::group_by(chr) %>% dplyr::summarise(n_loss = n()) #272 hemizygous
+summary_loss<- tx_mat_loss %>% dplyr::group_by(chr,region) %>% dplyr::summarise(n_loss = n()) #272 hemizygous
 print(summary_loss)
-tx_yloss<- filter(tx_mat_loss) %>% filter(chr == "X")  %>% #376
-  mutate(region = if_else(as.numeric(start) > 220000000, "PAR", "SLR"))
-y_loss_genelist_tx_mat<-tx_yloss %>% dplyr::select(tx_mat) 
+tx_yloss<- filter(tx_mat_loss) %>% filter(chr == "X" & region == "SLR") 
+y_loss_genelist_tx_mat<-tx_yloss %>% filter(region == "SLR") %>% dplyr::select(tx_mat) 
 
 #write.table(y_loss_genelist_tx_mat,"data/genelist_tx_mat.txt",quote=FALSE,sep="\t",row.names=F,col.names = F)
 
@@ -68,7 +78,7 @@ tophit_geneonly<- hits %>%
 
 tophit_partial<- tophit_geneonly %>% filter(alignedpropn <= 0.5 & alignedpropn > 0) ## 130 partially lost
 tophit_notloss<-tophit_geneonly %>% filter(alignedpropn > 0.5)  ## only 24 genes "not lost"
-## 376 lost before blast filtering, putatively
+## 360 lost before blast filtering, putatively
 
 
 hemiz_blast_confirm <- tx_yloss %>% filter(!tx_mat%in%tophit_notloss$qseqid)
@@ -91,7 +101,7 @@ heads<-c("genespace_yloss","blast_confirmed_loss","complete_loss","partial_loss"
 ylo<-(filter(summary_loss,chr =="X"))$n_loss
 
 
-vals<-c(376,352,222,130,125)
+vals<-c(360,347,222,130,125)
 resTable<-data.frame(heads,vals)
 print(resTable)
 
@@ -103,8 +113,8 @@ nc_partial_loss<-read.csv("../rumex_pangenome_annotation/yloss_partial_Sept2023.
 nc_all_loss<-rbind(nc_complete_loss,nc_partial_loss) %>% filter(chr =="X") #%>% select(repGene)
  # 344 genes partially or completely lost nc
 
-source("scripts/slr_rename.R")
-nc_all_loss_pars<-slr_rename_PARs(nc_all_loss)
+#source("scripts/slr_rename.R")
+nc_all_loss_pars<-slr_rename_NC_PAR(nc_all_loss)
 nc_all_loss <- nc_all_loss_pars %>% filter(region == "OldSLR")
 #167 genes completely lost in nc
 #344 genes partially or completely lost nc
@@ -143,19 +153,19 @@ print(contingency_table)
 #### what genes are "not lost" from both genomes
 #### ugh this is SOOSOSOOO annoying
 nc_hap1<- read_delim("data/nc_beds/hap1.bed.gz",delim = "\t",col_names = c("chr","start","end","gene")) #%>% dplyr::select(repGene)
-## gotta redo the shiz from previous study UGHHHHHHHHHHHHHHHHHHHH
+## gotta redo the stuff from previous study 
 hap1_raw<-data.table::fread("../rumex_pangenome_annotation/pg_hap1_wide_synonly.txt")
 hap1_nonsyn<-data.table::fread("../rumex_pangenome_annotation/pg_hap1_wide.txt")
-nsorths_hap1<-slr_rename_PARs(hap1_nonsyn) %>% filter_all(any_vars(grepl("\\*",.)))  
-onlysyn_hap1<-slr_rename_PARs(hap1_raw) %>% filter(!(pgID%in%nsorths_hap1$pgID)) # 31289 genes remain
+nsorths_hap1<-slr_rename_NC_PAR(hap1_nonsyn) %>% filter_all(any_vars(grepl("\\*",.)))  
+onlysyn_hap1<-slr_rename_NC_PAR(hap1_raw) %>% filter(!(pgID%in%nsorths_hap1$pgID)) # 31289 genes remain
 nc_notlost1<-onlysyn_hap1 %>% filter((hap1!="" & hap2!="" & salicifolius!=""))
 
 ##nc_notlost<- nc_hap1 %>% filter(!gene%in%nc_all_loss$nc_hap1 & chr == "X") 
-tx_notlost<-notlost %>% filter(chr =="X") %>% filter(!nc_hap1%in%nc_all_loss$hap1) # 1260
-nc_notlost<-nc_notlost1 %>% filter(chr =="X") %>% filter(!repGene%in%hemiz_blast_all$nc_hap1) # 2610
+tx_notlost<-notlost %>% filter(chr =="X" & region == "SLR") %>% filter(!nc_hap1%in%nc_all_loss$hap1) # 1260
+nc_notlost<-nc_notlost1 %>% filter(chr =="X" & region == "OldSLR") %>% filter(!repGene%in%hemiz_blast_all$nc_hap1) # 2610
 ## so many
 ## how many shared?
-shared_notlost<-intersect(tx_notlost$nc_hap1, nc_notlost$repGene) %>% length() # 994
+shared_notlost<-intersect(tx_notlost$nc_hap1, nc_notlost$repGene) %>% length() # 352
 ## add to dataframe
 
 geneloss_summary2 <- geneloss_summary %>% ungroup() %>% add_row(txtype = "no overlap", nctype = "no overlap", n = shared_notlost)
@@ -164,10 +174,11 @@ chisq_test <- chisq.test(contingency_table)
 print(chisq_test) # significant relationship between the two variables
 ## weeeee
 contingency_table
-### go back and redo add to main data for chrissakes i am soooo annoyed with this bullshit!
+
+
 geneloss_summary2
-write_csv(geneloss_summary2, "data/geneloss_summary_Oct2024.csv")
+write_csv(geneloss_summary2, "data/geneloss_summary_Jan2025.csv")
 #####
 ## take into account SLRs
-
+## done see above. 
 
