@@ -1,44 +1,66 @@
 library(ggplot2)
 library(tidyverse)
 library(cowplot)
-library(RColorBrewer)
+#library(RColorBrewer)
+library(khroma)
 
+## use palette
+vibrant<- color("vibrant")
+#vibrant
+#vibrant(2)
+vibrant()
 reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_sept12.csv.gz")
 
 reads_pg_pvals2 <- reads_pg_pvals %>% mutate(sigLFC = case_when(
     res.allele.padj < 0.1 &
       abs(res.allele.log2FoldChange) > 1 ~ "True",
-    TRUE ~"False" )) %>%
+    TRUE ~ "False")) %>%
   mutate(log2male_mean.mat = log2(male_mean.mat)) %>%
   mutate(log2male_mean.pat = log2(male_mean.pat))
   
   
 reads_pg_pvals2$sigLFC<-factor(reads_pg_pvals2$sigLFC, levels = c("True","False"))
 
-figure1a <- ggplot(reads_pg_pvals2,aes(x=male_mean.mat,y=male_mean.pat, color = sigLFC)) + 
+colors <- vibrant(7)[c(3,1)]
+
+figure1a <- ggplot(reads_pg_pvals2,aes(x=male_mean.mat,y=male_mean.pat)) + 
   #geom_point(aes(size = res.allele.lfcSE),alpha = 0.60) +
-  geom_point(alpha = 0.5, size =1) +
-  geom_errorbar(aes(ymin = ((male_mean.pat)-(male_SE.pat)), ymax = ((male_mean.pat)+(male_SE.pat)))) +
-  geom_errorbarh(aes(xmin = male_mean.mat-male_SE.mat, xmax = male_mean.mat+male_SE.mat)) +
+  geom_point(alpha = 0.5, size =1,aes(color = sigLFC)) +
+  geom_errorbar(aes(color = sigLFC,ymin = ((male_mean.pat)-(male_SE.pat)), ymax = ((male_mean.pat)+(male_SE.pat)))) +
+  geom_errorbarh(aes(color = sigLFC,xmin = male_mean.mat-male_SE.mat, xmax = male_mean.mat+male_SE.mat)) +
   geom_abline(slope = 1, intercept = 0, linetype=1) +
   theme_bw()+
-  geom_smooth(method ="lm") +
+  geom_smooth(method ="lm", color =  vibrant(7)[7]) + # all points regression line
+  geom_smooth(method = "lm", data = function(x) { filter(x, sigLFC == "True") }, se = T, fullrange = TRUE, color =  vibrant(7)[3]) +
+  # regression sig only
   xlab("mean expression of X\n gametolog in males") +
   ylab("mean expression of Y\n gametolog in males") +
   scale_x_continuous(transform = "log2",limits = c(NA,4000),breaks = c(0.0625,2,64,2048)) +
   scale_y_continuous(transform = "log2",limits = c(NA,4000),breaks = c(0.0625,2,64,2048)) +
-  labs(color= "p-val < 0.1 & |log2FC| >1 ", size = "log2FC std. error") +
+  labs(color= "p-val < 0.1 & |log2FC| >1 ") +
   theme(axis.text = element_text(size = 12),
         axis.title = element_text(size = 16),
         legend.text = element_text(size =12),
-        legend.title = element_text(size =12)) 
+        legend.title = element_text(size =12)) +
+  scale_color_manual(values= colors) # from the vibrant palette, see vignette("tol")
 figure1a
+
+
+########## sanity check - normalized counts #############
+##### using the norm factors from the dosage analyses (each sample has a norm factor)
+# doesn't change anything but the standard error bars
+# love et al. indicate norm not needed for this method
+# 
+
+
+
+
 #### norm counts using size factors from dosage analysis
-pvals_genes_norm <- read_csv("data/norm_rna_ase_resultsOnlySept2024.csv")
+pvals_genes_norm <- read_csv("data/norm_rna_ase_resultsOnlySept2024.csv.gz")
 
 ## normalized counts
 
-normCounts<-read_csv("data/normalizedCounts_xyExp.csv")
+normCounts<-read_csv("data/normalizedCounts_xyExp.csv.gz")
 
 ## unite norm counts with pvals
 reads_pg_pvals_norm<-inner_join(normCounts, pvals_genes_norm, 

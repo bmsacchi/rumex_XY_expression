@@ -1,7 +1,7 @@
 ## functions relevant for rumex xy expression project
 
 # invers of %in%
-`%nin%` <- negate(`%in%`)
+`%nin%` <- purrr:negate(`%in%`)
 
 # create table of log fold change cutoffs
 get_obs_table <- 

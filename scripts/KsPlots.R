@@ -109,9 +109,9 @@ summary(lm_yx) # p value is 0.0001773
 
 ### compare models
 
-#lm1<-lm(formula = YX_dNdiff ~ yx_readRatio, data=df_dN)
-#lm2 <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS, data=df_dN)
-#lm3 <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS + XYdS:yx_readRatio, data=df_dN)
+lm1<-lm(formula = YX_dNdiff ~ yx_readRatio, data=hyphy_reads_pg)
+lm2 <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS, data=hyphy_reads_pg)
+lm3 <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS + XYdS:yx_readRatio, data=hyphy_reads_pg)
 lm4<-lm(formula = YX_dNdiff ~ log2_readRatio, data=hyphy_reads_pg)
 lm5<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS, data=hyphy_reads_pg)
 lm6<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS + XYdS:log2_readRatio, data=hyphy_reads_pg)
@@ -123,7 +123,12 @@ step(lm6)
 #VIF(lm6) # VIF of 4 or larger means GTFO!
 ## yay!
 AIC(lm4,lm5) # mor
-###
+library(AICcmodavg)
+mymodels<-list(lm1,lm2,lm3,lm4,lm5,lm6,)
+names<-c("lm1","lm2","lm3","lm4","lm5","lm6")
+aictab(mymodels, modnames = names)
+## lm2 and lm5 equally good
+# lm3 and 6 probably ok
 require(ggiraph)
 require(ggiraphExtra)
 require(plyr)

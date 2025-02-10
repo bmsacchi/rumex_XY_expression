@@ -13,7 +13,7 @@ library(tidyverse)
 
 ## Sag deseq
 ```{r}
-rnaCountsSag<-read_table("readCountsSagittatus/sagittatusRnaCounts.txt")
+rnaCountsSag<-read_table("data/readCountsSagittatus/sagittatusRnaCounts.txt")
 rnaColnamesSag<-colnames(rnaCountsSag)
 rnaColnamesRepairedSag <- gsub("(Rsg.+)Aligned.+", "\\1", rnaColnamesSag)
 colnames(rnaCountsSag)<-rnaColnamesRepairedSag 
@@ -137,9 +137,7 @@ ggsave("compare_sag_rhast_mf.pdf",w = 8,h =6)
 
 
 ```
-
-```{r}
-
-```
+### to do: try method that uses stable expression genes to normalize
+## new script
 
 
