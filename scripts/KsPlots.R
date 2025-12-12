@@ -111,9 +111,9 @@ summary(lm_yx) # p value is 0.0001773
 
 ### compare models
 
-lm1<-lm(formula = YX_dNdiff ~ yx_readRatio, data=hyphy_reads_pg)
-lm2 <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS, data=hyphy_reads_pg)
-lm3 <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS + XYdS:yx_readRatio, data=hyphy_reads_pg)
+# lm1<-lm(formula = YX_dNdiff ~ yx_readRatio, data=hyphy_reads_pg)
+# lm2 <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS, data=hyphy_reads_pg)
+# lm3 <- lm(formula = YX_dNdiff ~ yx_readRatio + XYdS + XYdS:yx_readRatio, data=hyphy_reads_pg)
 lm4<-lm(formula = YX_dNdiff ~ log2_readRatio, data=hyphy_reads_pg)
 lm5<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS, data=hyphy_reads_pg)
 lm6<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS + XYdS:log2_readRatio, data=hyphy_reads_pg)
@@ -135,13 +135,13 @@ require(ggiraph)
 require(ggiraphExtra)
 require(plyr)
 
-ggPredict(lm5,se=TRUE) + theme_bw() +  
+ggPredict(lm5,se=TRUE) + theme_bw()+  
   xlab("log2 (y/x read ratio)") +
   ylab("dN Y - dN X") +
   theme_classic(base_size = 18)
-ggsave("figures/Figure4_2025Jan.png",h=6,w=8)
+#ggsave("figures/Figure4_2025Jan.png",h=6,w=8)
 
-summary(lm5)# geom_text(x = -7, y = 0.25, label = lm_eqn(df), parse = TRUE)
+summary(lm5) # geom_text(x = -7, y = 0.25, label = lm_eqn(df), parse = TRUE)
 
 
 
@@ -161,14 +161,32 @@ mymodels<-list(lm1,lm2,lm3)
 names<-c("lm1","lm2","lm3")
 aictab(mymodels, modnames = names)
 library(khroma) # rpretty and color blind friendly
-ggPredict(lm3,se=TRUE) +
+ggPredict(m2,se=TRUE) +
   theme_bw() +  
   xlab("dS") +
   ylab("dN Y - dN X") +
-  theme_classic(base_size = 18) + 
-  scale_color_bam() +
-  scale_fill_bam() 
-ggsave("figures/DnVsDs_interaction_2025Jan.png", h =6, w =8)
+  theme_classic(base_size = 18)# + 
+  #scale_color_bam() +
+  
+  #scale_fill_bam() 
+#ggsave("figures/DnVsDs_interaction_2025Jan.png", h =6, w =8)
+ggsave("figures/DnVsDs_readRatio.png", h = 6, w = 8)
+### try models again
+m1 <- lm(formula = YX_dNdiff ~ XYdS, data=hyphy_reads_pg)
+m2 <- lm(formula = YX_dNdiff ~ XYdS + log2_readRatio, data=hyphy_reads_pg)
+m3 <- lm(formula = YX_dNdiff ~ XYdS * log2_readRatio, data=hyphy_reads_pg)
+m4 <- lm(formula = YX_dNdiff ~ XYdS + log2_readRatio + log2_readRatio:XYdS, data=hyphy_reads_pg)
+AIC(m1,m2,m3,m4) # m2 has lowest AIC
+
+m4<-lm(formula = YX_dNdiff ~ log2_readRatio, data=hyphy_reads_pg)
+m5<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS, data=hyphy_reads_pg)
+m6<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS*log2_readRatio, data=hyphy_reads_pg)
+m7<-lm(formula = YX_dNdiff ~ log2_readRatio + XYdS +XYdS:log2_readRatio, data=hyphy_reads_pg)
+
+
+AIC(m4,m5,m6,m7)
+summary(m1)
+
 
 ################### ks plot positions all genes ################################
 
