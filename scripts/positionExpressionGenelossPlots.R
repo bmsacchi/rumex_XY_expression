@@ -162,7 +162,7 @@ ggplot(reads_pg_pvals4) +
 ### calc median in _ gene windows? 1 mb windows?
 ## combine?
 
-ggplot(reads_pg_pvals4) + 
+pc<-ggplot(reads_pg_pvals4) + 
   geom_point(aes(x = start_mb, y = log2(readRatio), color = sigLFC)) + 
   geom_hline(yintercept = 0, linetype = "dashed", alpha = 0.7) +
   geom_line(aes(x=start_mb,y=log2(medianRatio))) +
@@ -177,5 +177,6 @@ ggplot(reads_pg_pvals4) +
   ylab("Read ratio (Y/X)") 
 #ggsave("figures/Figure3C_Ypos_windows50Mb_2025Jan.png", width = 8, height = 6, units = "in", dpi = 300)
 
-
-
+pc
+cowplot::plot_grid(ppos, pwin,pc, ncol = 1, align = "v",labels = c("A","B","C"))
+ggsave("figures/Figure3_June2025.png", width = 8, height = 12, units = "in", dpi = 300)

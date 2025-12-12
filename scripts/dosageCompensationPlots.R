@@ -11,7 +11,7 @@ normcounts<-read_csv("data/norm_counts_autosomefactors_eQTLleafRhast.csv.gz")
 #  select(id_tx_mat)
 x_overexpressed<-filter(reads_pg_pvals,
                         res.allele.padj < 0.1 & 
-                          res.allele.log2FoldChange < 1) %>%
+                          res.allele.log2FoldChange < -1) %>%
   select(id_tx_mat, id_tx_pat)
 
 y_overexpressed<-filter(reads_pg_pvals, res.allele.padj < 0.1 &
@@ -38,8 +38,9 @@ normcounts_clean<-#as.data.frame(normalized_counts) %>%
 #
 #
 
-hemiz_blast_confirm<-read_csv("data/tx_yloss_blastconfirmed_Aug2024.csv.gz") %>% 
+hemiz_blast_confirm<-read_csv("data/tx_yloss_blastconfirmed_Aug2024.csv.gz")%>% 
   select(tx_mat)
+
 dc_combo <- normcounts_clean %>% mutate(genetype = case_when(
   #Geneid%in%completely_silenced$id_tx_mat ~ "completeYsilenced",
   Geneid%in%x_overexpressed$id_tx_mat ~ "xOverexp",
@@ -178,6 +179,11 @@ df$pred1 = predict(fitlm)
 fitlm2 = lm(maleMean ~ femaleMean, data =df)
 df$pred2 = predict(fitlm2)
 #mainplotlog2<-
+####
+
+
+
+
 
 
 
@@ -218,5 +224,14 @@ ggdraw(mainplot + theme_half_open(12)) +
   draw_plot(inset,
             x=.53,y= 0.1, width =.3,height = .4)
 ggsave("figures/Fig5_dcPlot_inset.png", bg = "white",  h = 5, w = 7)
+
+#ID points with potential partial DC - for defense
+
+dc_genes <- dc_combo %>%
+  mutate(ratio = maleMean/femaleMean) %>%
+  mutate(log2ratio = log2((maleMean + 1) / (femaleMean + 1))) %>%
+         select(Geneid, ratio,log2ratio) %>%
+  filter(ratio > 0.8)
+View(dc_genes)
 
 
