@@ -18,7 +18,8 @@ hyphy/orthofinder4/
 hyphy/parsed_output/
 hyphy/pyparsed_output/
 Rhastxy.april2024.stephen.coge.aligncoords.gcoords.ks.txt
-readCountsRNAeQTL/
+readCountsRNAeQTL_multi/*.summary
+readCountsRNAeQTL/*.summary
 dna_ase_results_eqtl.csv
 rna_ase_results_eqtl.csv
 <<<<<<< HEAD
