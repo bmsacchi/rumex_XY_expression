@@ -72,9 +72,10 @@ figure1a <- ggplot(reads_pg_pvals2,aes(x=male_mean.mat,y=male_mean.pat)) +
 ## no filter
 figure1a
 ggsave("figures/Figure1a_2024Jan.png", h =6, w =10)
-## cute!
+## this is the final figure
 
-
+#######
+# an old attempt to remake figure with long format data for some reason
 #######
 figure1a_long <- ggplot(sum_filt_readcounts_long,aes(x=male_mean.mat,y=male_mean.pat)) +
   geom_point(alpha = 0.5, size =1,aes(color = sigLFC)) +
@@ -130,9 +131,10 @@ figure1a_long_filt
 
 # what are the R^2 etc
 ### ok just keep what you're originally doing, and describe properly in the results.
-## okeey!
 ## save copies for supmat
 
+
+##### regression of all points, and sig points #####
 
 
 colnames(reads_pg_pvals2) # rm NaN
@@ -148,10 +150,6 @@ summary(lm_sig)
 ##### using the norm factors from the dosage analyses (each sample has a norm factor)
 # doesn't change anything but the standard error bars
 # love et al. indicate norm not needed for this method
-# 
-
-
-
 
 #### norm counts using size factors from dosage analysis
 pvals_genes_norm <- read_csv("data/norm_rna_ase_resultsOnlySept2024.csv.gz")
