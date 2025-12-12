@@ -34,3 +34,4 @@ coveragePlots/
 rna_ase_results_eqtl_sept3.csv
 data/contact_map_TXfranken.hic
 data/contact_map_TXfullemerge.hic
+.RData
