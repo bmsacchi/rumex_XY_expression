@@ -5,7 +5,7 @@ library(DESeq2)
 library(gtools)
 source("scripts/generalFunctions.R") # load relevant data cleaning and processing functions
 
-pgMatOrths<-read_csv("data/pgMatOrths.csv")
+pgMatOrths<-read_csv("data/pgMatOrths.csv.gz")
 dnaCountsClean<-read_csv("data/dnaCountsClean.csv.gz")
 #rnaCountsClean<-read_csv("data/rnaCountsClean.csv.gz")
 
@@ -57,53 +57,55 @@ allele<-str_extract(sorted_col_names,".at$") # mat pat mat pat extract suffices
 colInfo<-data.frame(sorted_col_names,sample,allele) # create column info df
 
 file_name<-"data/dna_ase_results_eqtl_noPAR.csv"
+reads_pg_pvals_dna<- read_csv("data/dna_ase_results_eqtl_noPAR.csv.gz")
 
+biasedgenes_dna<-filter(reads_pg_pvals_dna, sigTest == "sig" & abs(res.allele.log2FoldChange) > 0.5 )
 
-### DNA ase counts
-if (!file.exists(file_name)) {
+# ### DNA ase counts
+# if (!file.exists(file_name)) {
  
-  print("Running the command because the file does not exist.")
+#   print("Running the command because the file does not exist.")
 
  
-  ase_matrix_dna<-as.matrix(ase_data_dna) # convert to matrix
-  design<- ~sample+allele # design formula
+#   ase_matrix_dna<-as.matrix(ase_data_dna) # convert to matrix
+#   design<- ~sample+allele # design formula
   
-  m <- 75 # number of samples
+#   m <- 75 # number of samples
 
-  dds <- DESeqDataSetFromMatrix(ase_data_dna, colInfo, design) # create deseq object
-  sizeFactors(dds) <- rep(1, 2*m) # set size factors to unity
-  dds <- DESeq(dds, fitType="local") # fit model
+#   dds <- DESeqDataSetFromMatrix(ase_data_dna, colInfo, design) # create deseq object
+#   sizeFactors(dds) <- rep(1, 2*m) # set size factors to unity
+#   dds <- DESeq(dds, fitType="local") # fit model
   
-  resultsNames(dds) # get results names
+#   resultsNames(dds) # get results names
 
-  res.allele <- results(dds, name="allele_pat_vs_mat") # get results
-  head(res.allele$log2FoldChange) # check log2foldchange
-
-
-  adj_pvals_dna<-res.allele$padj # get adjusted pvals
+#   res.allele <- results(dds, name="allele_pat_vs_mat") # get results
+#   head(res.allele$log2FoldChange) # check log2foldchange
 
 
-  pvals_genes_dna<-data.frame(res.allele@rownames,res.allele$padj,res.allele$log2FoldChange,res.allele$lfcSE) # create df with pvals
-  reads_pg_pvals_dna<-inner_join(reads_pg_dna_noPAR, pvals_genes_dna, by =c("pairID" ="res.allele.rownames")) %>% # join with read data
-    mutate(sigTest = 
-             case_when((res.allele.padj < 0.1) ~ "sig",
-                       TRUE ~"nonsig" )) %>% relocate(c(pairID:totalCountAll,res.allele.padj:sigTest))
-  #write_csv(reads_pg_pvals_dna, "data/dna_ase_results_eqtl_noPAR.csv")
-} else { 
-  print(paste("Skipping command because", file_name, "exists."))
-  #head(reads_pg_pvals)
-  reads_pg_pvals_dna<- read_csv("data/dna_ase_results_eqtl_noPAR.csv") # read in data
-}
+#   adj_pvals_dna<-res.allele$padj # get adjusted pvals
 
-fold_change_cutoffs <- c(0.1,0.5, 1, 1.5, 2) # fc cutoffs for summary table
-obs_tables_dna <- lapply(fold_change_cutoffs, function(cutoff) { 
-  get_obs_table(reads_pg_pvals_dna, cutoff)
-})
-combined_table_dna <- do.call(rbind, obs_tables_dna) # combine tables
-print(combined_table_dna) # print table
+
+#   pvals_genes_dna<-data.frame(res.allele@rownames,res.allele$padj,res.allele$log2FoldChange,res.allele$lfcSE) # create df with pvals
+#   reads_pg_pvals_dna<-inner_join(reads_pg_dna_noPAR, pvals_genes_dna, by =c("pairID" ="res.allele.rownames")) %>% # join with read data
+#     mutate(sigTest = 
+#              case_when((res.allele.padj < 0.1) ~ "sig",
+#                        TRUE ~"nonsig" )) %>% relocate(c(pairID:totalCountAll,res.allele.padj:sigTest))
+#   #write_csv(reads_pg_pvals_dna, "data/dna_ase_results_eqtl_noPAR.csv")
+# } else { 
+#   print(paste("Skipping command because", file_name, "exists."))
+#   #head(reads_pg_pvals)
+#   reads_pg_pvals_dna<- read_csv("data/dna_ase_results_eqtl_noPAR.csv") # read in data
+# }
+
+# fold_change_cutoffs <- c(0.1,0.5, 1, 1.5, 2) # fc cutoffs for summary table
+# obs_tables_dna <- lapply(fold_change_cutoffs, function(cutoff) { 
+#   get_obs_table(reads_pg_pvals_dna, cutoff)
+# })
+# combined_table_dna <- do.call(rbind, obs_tables_dna) # combine tables
+# print(combined_table_dna) # print table
 #write_csv(combined_table_dna, "data/n_xy_oe_DNA_eQTL_lfcRanges.csv")
 # genes with mapping bias. 
-biasedgenes_dna<-filter(reads_pg_pvals_dna, sigTest == "sig" & abs(res.allele.log2FoldChange) > 0.5 ) #%>% select(pairID, id_tx_mat, id_tx_pat)
+ #%>% select(pairID, id_tx_mat, id_tx_pat)
 
 
 

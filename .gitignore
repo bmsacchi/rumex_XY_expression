@@ -22,11 +22,8 @@ readCountsRNAeQTL_multi/*.summary
 readCountsRNAeQTL/*.summary
 dna_ase_results_eqtl.csv
 rna_ase_results_eqtl.csv
-<<<<<<< HEAD
 67935_67937.CDS-CDS.last.tdd10.cs0.filtered.dag.all.go_D20_g10_A5.aligncoords.gcoords.ks.txt
 dna_ase_results_eqtl_noPAR.csv
-=======
->>>>>>> 2549a04440239cfbcb816158897053c48a88733b
 hyphy/FitMG94_local/
 coveragePlots/
 *.nhr
@@ -44,4 +41,5 @@ expression_03_2026/**/logs/
 **/abundance.h5
 **/abundance.tsv
 **/run_info.json
+.Rdata
 
