@@ -35,3 +35,13 @@ coveragePlots/
 rna_ase_results_eqtl_sept3.csv
 data/contact_map_TXfranken.hic
 data/contact_map_TXfullemerge.hic
+# Ignore fasta and gtf files anywhere under expression_03_2026
+expression_03_2026/**/*.fa
+expression_03_2026/**/*.fasta
+expression_03_2026/**/*.gtf
+expression_03_2026/**/*.idx
+expression_03_2026/**/logs/
+**/abundance.h5
+**/abundance.tsv
+**/run_info.json
+
