@@ -1,0 +1,146 @@
+from os import path
+import numpy as np
+import pandas as pd
+import glob
+import re
+
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+KALLISTO_IDX = "genome/tx_nomatpar_transcripts.idx"
+BOOTSTRAPS   = 100
+THREADS      = 8
+READS_DIR    = "/ohta2/Rumex/eQTL/Transcripts"          # directory containing paired FASTQ files
+OUT_DIR      = "kallisto_out"
+
+# ── Sample sheet ──────────────────────────────────────────────────────────────
+# Expects one sample name per line; reads assumed to follow the naming
+# convention: {READS_DIR}/{sample}_R1_clean.fastq.gz
+#             {READS_DIR}/{sample}_R2_clean.fastq.gz
+# Adjust the expand() calls below if your naming differs.
+#with open("RNA.samples.txt", "r") as fh:
+#    SAMPLES = [line.strip() for line in fh if line.strip()]
+
+
+
+# ── Build sample to  path mapping from actual files ─────────────────────────────
+# Grab all R1 files and derive sample name by stripping _R1.fastq.gz
+r1_files = sorted(glob.glob(f"{READS_DIR}/*LR_R1.fastq.gz"))
+
+# Sample name = everything before _R1.fastq.gz
+SAMPLES = [path.basename(f).replace("_R1.fastq.gz", "") for f in r1_files]
+
+# Build explicit lookup dictionaries
+R1 = {s: f"{READS_DIR}/{s}_R1.fastq.gz" for s in SAMPLES}
+R2 = {s: f"{READS_DIR}/{s}_R2.fastq.gz" for s in SAMPLES}
+
+
+
+# ── Target rule ───────────────────────────────────────────────────────────────
+rule all:
+    input:
+        # Per-sample abundance files
+        KALLISTO_IDX,
+        expand(f"{OUT_DIR}/{{sample}}/abundance.h5",  sample=SAMPLES),
+        expand(f"{OUT_DIR}/{{sample}}/abundance.tsv", sample=SAMPLES),
+        # Merged count matrix
+        f"{OUT_DIR}/merged_tpm.tsv",
+        f"{OUT_DIR}/merged_est_counts.tsv",
+        # Run-info summary across all samples
+        f"{OUT_DIR}/run_info_summary.tsv",
+
+# ── Build kallisto index ──────────────────────────────────────────────────────
+rule kallisto_index:
+    input:
+        "genome/tx_nomatpar_transcripts.fa",
+    output:
+        KALLISTO_IDX,
+    log:
+        "logs/kallisto_index.log",
+    conda:
+        "envs/kallisto.yaml"
+    shell:
+        """
+        kallisto index -i {output} {input} &> {log}
+        """
+
+# ── Per-sample pseudoalignment ────────────────────────────────────────────────
+rule kallisto_quant:
+    input:
+        r1  = lambda wc: R1[wc.sample],
+        r2  = lambda wc: R2[wc.sample],
+        idx = KALLISTO_IDX
+    output:
+        h5   = f"{OUT_DIR}/{{sample}}/abundance.h5",
+        tsv  = f"{OUT_DIR}/{{sample}}/abundance.tsv",
+        info = f"{OUT_DIR}/{{sample}}/run_info.json",
+    log:
+        "logs/kallisto/{sample}.log",
+    threads: THREADS
+    conda:
+        "envs/kallisto.yaml" 
+    shell:
+        """
+        kallisto quant \
+            -i {input.idx} \
+            -o {OUT_DIR}/{wildcards.sample} \
+            --bootstrap-samples {BOOTSTRAPS} \
+            -t {threads} \
+            {input.r1} {input.r2} \
+            &> {log}
+        """
+
+# ── Merge TPM and estimated counts across all samples ─────────────────────────
+rule merge_abundance:
+    input:
+        expand(f"{OUT_DIR}/{{sample}}/abundance.tsv", sample=SAMPLES),
+    output:
+        tpm    = f"{OUT_DIR}/merged_tpm.tsv",
+        counts = f"{OUT_DIR}/merged_est_counts.tsv",
+    run:
+        tpm_frames    = []
+        counts_frames = []
+
+        for fp in input:
+            sample = path.basename(path.dirname(fp))
+            df = pd.read_csv(fp, sep="\t", index_col=0)   # index = target_id
+
+            tpm_frames.append(
+                df[["tpm"]].rename(columns={"tpm": sample})
+            )
+            counts_frames.append(
+                df[["est_counts"]].rename(columns={"est_counts": sample})
+            )
+
+        tpm_merged    = pd.concat(tpm_frames,    axis=1)
+        counts_merged = pd.concat(counts_frames, axis=1)
+
+        tpm_merged.to_csv(   output.tpm,    sep="\t")
+        counts_merged.to_csv(output.counts, sep="\t")
+
+
+# ── Summarise run_info.json across all samples ────────────────────────────────
+rule summarise_run_info:
+    input:
+        expand(f"{OUT_DIR}/{{sample}}/run_info.json", sample=SAMPLES),
+    output:
+        f"{OUT_DIR}/run_info_summary.tsv",
+    run:
+        import json
+        rows = []
+        for fp in input:
+            sample = path.basename(path.dirname(fp))
+            with open(fp) as fh:
+                info = json.load(fh)
+            info["sample"] = sample
+            rows.append(info)
+
+        summary = pd.DataFrame(rows).set_index("sample")
+        # Reorder so sample is first column
+        cols = ["n_processed", "n_pseudoaligned", "n_unique",
+                "p_pseudoaligned", "p_unique", "n_bootstraps",
+                "n_targets", "kallisto_version"]
+        summary = summary[[c for c in cols if c in summary.columns]]
+        summary.to_csv(output[0], sep="\t")
+
+
+
