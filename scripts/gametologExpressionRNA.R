@@ -160,6 +160,7 @@ reads_pg_pvals<-inner_join(reads_pg, pvals_genes,
   }# read in data
 
 
+reads_pg_pvals<-read_csv("data/rna_ase_results_eqtl_sept12.csv.gz")# read in data
 
 fold_change_cutoffs <- c(0.5, 1, 1.5, 2)
 obs_tables <- lapply(fold_change_cutoffs, function(cutoff) {
