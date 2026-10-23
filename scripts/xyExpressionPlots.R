@@ -23,7 +23,6 @@ reads_pg_pvals2 <- reads_pg_pvals %>% mutate(sigLFC = case_when(
   
   
 reads_pg_pvals2$sigLFC<-factor(reads_pg_pvals2$sigLFC, levels = c("True","False"))
-### retransforming the data bc I hate myself!
 colnames(reads_pg_pvals)
 
 df<-reads_pg_pvals %>% select(c(1:9,23:26,28:176,184:332))  %>% mutate(sigLFC = case_when(
