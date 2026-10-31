@@ -15,9 +15,9 @@ hyphy_anno_reads %>% filter(seqname.pat =="Y" & XYdS <0.5) %>%
 
 ## define the model ## exampl3 ##
 model = list(
-  response ~ 1,  # plateau (int_1)
+  response ~ 1,  # plateau (Intercept_1)
   ~ 0 + time,    # joined slope (time_2) at cp_1
-  ~ 1 + time     # disjoined slope (int_3, time_3) at cp_2
+  ~ 1 + time     # disjoined slope (Intercept_3, time_3) at cp_2
 )
 #get data and fit it
 ex = mcp_example("demo")
